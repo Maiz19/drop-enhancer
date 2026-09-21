@@ -205,6 +205,15 @@ public class RarityResolver
 
 		double percentile = percentileRank(distribution, score);
 		RarityTier tier = bucketByPercentile(percentile);
+		if (basis == RarityBasis.COMBINATION)
+		{
+			// Completion can promote a cheap drop, but must never demote its value tier.
+			RarityTier valueTier = bucketByThreshold(price);
+			if (valueTier.ordinal() > tier.ordinal())
+			{
+				tier = valueTier;
+			}
+		}
 		return new RarityResult(tier, itemId, price, highAlch, compPercent, completionScore, valueScore, percentile,
 								dataset.compositeScores.length, 0, 0, alchPrice);
 	}

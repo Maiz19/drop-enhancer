@@ -507,7 +507,7 @@ public interface CelebrationConfig extends Config
 	}
 
 	@ConfigItem(keyName = "rarityBasis", name = "Rarity based on",
-				description = "Wiki completion rarity and gold value, combined 60/40. Untradeable items always use rarity only.", section = rarity,
+				description = "Combination blends wiki completion and value 60/40, with the value tier as a minimum. Untradeable items use rarity only.", section = rarity,
 				position = 1)
 	default RarityBasis rarityBasis()
 	{
@@ -728,10 +728,10 @@ public interface CelebrationConfig extends Config
 	}
 	@ConfigItem(keyName = "groundItemThresholds", name = "Link to Ground Items values",
 				description = "Use Ground Items medium/high/insane prices for Uncommon/Rare/Very rare. Value mode uses these directly; "
-							  + "Combination retains wiki weighting. Price remains per-item GE with alch fallback.",
+							  + "Combination can raise the value tier, never lower it. Price remains per-item GE with alch fallback.",
 				section = rarity, position = -1)
 	default boolean groundItemThresholds()
 	{
-		return false;
+		return true;
 	}
 }

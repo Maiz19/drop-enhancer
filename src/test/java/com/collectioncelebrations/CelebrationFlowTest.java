@@ -93,6 +93,83 @@ public class CelebrationFlowTest
 		return c.getValue();
 	}
 	@Test
+	public void simulatedSynapseUsesValueFloorForPopupAndSoundInBothEventOrders() throws Exception
+	{
+		for (int price : new int[] {38_000_000, 40_000_000})
+		{
+			for (boolean unlockFirst : new boolean[] {true, false})
+			{
+				setup();
+				String name = "Tormented synapse";
+				int id = 1; // Synthetic item definition; no game client or live account is used.
+				ItemComposition item = mock(ItemComposition.class);
+				when(item.getName()).thenReturn(name);
+				when(item.isGeTradeable()).thenReturn(true);
+				when(p.items.getItemComposition(anyInt())).thenReturn(item);
+				when(p.items.canonicalize(id)).thenReturn(id);
+				when(p.items.getItemPrice(anyInt())).thenReturn(100_000_000);
+				when(p.items.getItemPrice(id)).thenReturn(price);
+				RarityResolver resolver = new RarityResolver(p.items, p.config, new DropRateResolver());
+				net.runelite.client.plugins.grounditems.GroundItemsConfig ground =
+					mock(net.runelite.client.plugins.grounditems.GroundItemsConfig.class);
+				resolver.groundItemsConfig = ground;
+				when(ground.mediumValuePrice()).thenReturn(100_000);
+				when(ground.highValuePrice()).thenReturn(1_000_000);
+				when(ground.insaneValuePrice()).thenReturn(10_000_000);
+				when(ground.insaneValueColor()).thenReturn(java.awt.Color.MAGENTA);
+				java.util.Map<String, RarityResolver.CompletionEntry> data = new java.util.HashMap<>();
+				for (int n = 1; n <= 100; n++)
+				{
+					RarityResolver.CompletionEntry entry = new RarityResolver.CompletionEntry();
+					entry.name = n == id ? name : "Example " + n;
+					entry.comp = n == id ? 100.0 : 0.0; // Deliberately gives the synapse the lowest wiki rarity.
+					entry.tabs = List.of();
+					data.put(String.valueOf(n), entry);
+				}
+				resolver.reload(data);
+				when(p.wiki.resolve(id, name)).thenAnswer(call -> resolver.resolve(id, name));
+				when(p.wiki.entry(id, name)).thenReturn(new WikiRarity.Entry(id, name, 100.0, false, List.of()));
+				LootReceived drop = new LootReceived("Tormented Demon", 450, LootRecordType.NPC,
+					List.of(new ItemStack(id, 1)), 1, null);
+				if (unlockFirst) { chat("New item added to your collection log: " + name); }
+				p.onLootReceived(drop);
+				if (!unlockFirst) { chat("New item added to your collection log: " + name); }
+				Celebration shown = release();
+				assertEquals(PreviewTier.VERY_RARE, shown.tier);
+				assertEquals(price, shown.value);
+				assertTrue(shown.newSlot);
+				assertEquals(java.awt.Color.MAGENTA, TierStyle.color(shown.tier, p.config, ground));
+				verify(p.sounds).playNow("veryrare.wav", 70);
+				verify(p.sounds, never()).playNow(eq("rare.wav"), anyInt());
+				p.onBeforeRender(new BeforeRender());
+				verify(p.overlay, times(1)).show(any(), anyLong());
+				if (price == 38_000_000 && unlockFirst)
+				{
+					java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(520, 275, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+					java.awt.Graphics2D g = image.createGraphics();
+					try
+					{
+						g.setColor(new java.awt.Color(20, 22, 28));
+						g.fillRect(0, 0, 520, 275);
+						CelebrationOverlay.drawPanel(g, 20, 20, 480, shown, TierStyle.color(shown.tier, p.config, ground), null);
+					}
+					finally { g.dispose(); }
+					javax.imageio.ImageIO.write(image, "png", new java.io.File("build/synapse-simulation.png"));
+				}
+				p.onLootReceived(drop);
+				p.time += 1500;
+				p.onBeforeRender(new BeforeRender());
+				ArgumentCaptor<Celebration> popups = ArgumentCaptor.forClass(Celebration.class);
+				verify(p.overlay, times(2)).show(popups.capture(), anyLong());
+				Celebration repeat = popups.getAllValues().get(1);
+				assertFalse(repeat.newSlot);
+				assertEquals(PreviewTier.VERY_RARE, repeat.tier);
+				verify(p.sounds, times(2)).playNow("veryrare.wav", 70);
+			}
+		}
+	}
+
+	@Test
 	public void noPopupOrCollectionSoundBeforeCaseRelease()
 	{
 		sync(1);
