@@ -140,6 +140,113 @@ public class CelebrationFlowTest
 		verify(p.overlay, times(1)).show(any(), anyLong());
 	}
 	@Test
+	public void lootArrivingAfterUnlockPresentationDoesNotCreateARepeatPopup()
+	{
+		when(p.wiki.dropRateText("General Graardor", NAME)).thenReturn("1/381");
+		chat("New item added to your collection log: " + NAME);
+		Celebration shown = release();
+		loot();
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(1)).show(any(), anyLong());
+		verify(p.sounds, times(1)).playNow("CollectionLog.wav", 70);
+		assertEquals("General Graardor", shown.source);
+		assertEquals(ITEM, shown.itemId);
+		assertEquals("1/381", shown.dropRateText);
+		// A second real drop must still get its own notification.
+		loot();
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(2)).show(any(), anyLong());
+	}
+
+	@Test
+	public void lootArrivingWhileUnlockIsQueuedForSeveralSecondsStillMerges()
+	{
+		chat("New item added to your collection log: " + NAME);
+		p.time += 3000;
+		loot();
+		release();
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(1)).show(any(), anyLong());
+	}
+
+	@Test
+	public void nativeUnlockThenLateLootAndChatProduceOnePopup()
+	{
+		nativeUnlock(NAME);
+		Celebration shown = release();
+		p.time += 1500;
+		loot();
+		chat("New item added to your collection log: " + NAME);
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(1)).show(any(), anyLong());
+		assertEquals("General Graardor", shown.source);
+	}
+
+	@Test
+	public void unmatchedUnlockDoesNotConsumeADropOutsideTheCorrelationWindow()
+	{
+		chat("New item added to your collection log: " + NAME);
+		release();
+		p.time += 6000;
+		loot();
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(2)).show(any(), anyLong());
+	}
+
+	@Test
+	public void delayedUnlockDoesNotRestartAFinishedLootPopup()
+	{
+		sync(1);
+		loot();
+		Celebration shown = release();
+		p.time += 1500;
+		when(p.overlay.showing(shown)).thenReturn(false);
+		chat("New item added to your collection log: " + NAME);
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(1)).show(any(), anyLong());
+		verify(p.sounds, times(1)).playNow("CollectionLog.wav", 70);
+		assertTrue(shown.newSlot);
+	}
+
+	@Test
+	public void heldUnlockMergesWithChestLootAfterTheShortMatchingWindow()
+	{
+		chat("New item added to your collection log: " + NAME);
+		when(p.gate.blocked()).thenReturn(true);
+		p.time += 60000;
+		p.onGameTick(new GameTick());
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, never()).show(any(), anyLong());
+		loot();
+		when(p.gate.blocked()).thenReturn(false);
+		Celebration shown = release();
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(1)).show(any(), anyLong());
+		assertTrue(shown.newSlot);
+		assertEquals("General Graardor", shown.source);
+	}
+
+	@Test
+	public void lateLootWithoutSourceCanOnlyConsumeUnlockOnce()
+	{
+		chat("New item added to your collection log: " + NAME);
+		release();
+		LootReceived event = new LootReceived(null, 624, LootRecordType.NPC, List.of(new ItemStack(ITEM, 1)), 1, null);
+		p.onLootReceived(event);
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(1)).show(any(), anyLong());
+		p.onLootReceived(event);
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, times(2)).show(any(), anyLong());
+	}
+
+	@Test
 	public void lootBeforeFirstUnlockPreservesSourceAndIcon()
 	{
 		loot();

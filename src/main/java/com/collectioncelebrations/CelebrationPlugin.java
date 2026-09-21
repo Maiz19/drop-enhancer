@@ -105,6 +105,7 @@ public class CelebrationPlugin extends Plugin
 	private final Set<String> knownLoggedNames = new HashSet<>();
 	private final Set<Widget> hiddenPaint = Collections.newSetFromMap(new IdentityHashMap<>());
 	private final Map<String, Celebration> recentLoot = new HashMap<>();
+	private static final long REWARD_MATCH_MS = 5000;
 	private long sequence;
 	private boolean notificationStarted;
 	private String replacedNotification;
@@ -180,7 +181,7 @@ public class CelebrationPlugin extends Plugin
 	{
 		gate.refresh();
 		cox.tick();
-		recentLoot.values().removeIf(c -> now() - c.created > 5000);
+		recentLoot.values().removeIf(c -> now() - c.created > REWARD_MATCH_MS);
 	}
 
 	@Subscribe
@@ -316,7 +317,7 @@ public class CelebrationPlugin extends Plugin
 		long now = now();
 		for (Celebration c : pending.items())
 		{
-			if (c.name.equalsIgnoreCase(name) && now - c.created < 2000)
+			if (c.name.equalsIgnoreCase(name) && now - c.created < REWARD_MATCH_MS)
 			{
 				c.newSlot = true;
 				c.extraItem = false;
@@ -324,7 +325,7 @@ public class CelebrationPlugin extends Plugin
 			}
 		}
 		Celebration recent = recentLoot.get(name.toLowerCase(Locale.ROOT));
-		if (recent != null && now - recent.created < 2000)
+		if (recent != null && now - recent.created < REWARD_MATCH_MS)
 		{
 			if (!recent.newSlot)
 			{
@@ -337,20 +338,17 @@ public class CelebrationPlugin extends Plugin
 				else
 				{
 					recent.upgradeOnly = true;
-					if (overlay.showing(recent))
-					{
-						queueUnlockJingle(recent);
-					}
-					else
-					{
-						pending.add(recent);
-					}
+					// Promote the existing reward without restarting an already finished popup.
+					queueUnlockJingle(recent);
 				}
 			}
 			return;
 		}
 		int id = names.getOrDefault(name.toLowerCase(Locale.ROOT), -1);
-		pending.add(new Celebration(name, id, 1, null, true, ++sequence, now, gate.delayMillis()));
+		Celebration unlocked = new Celebration(name, id, 1, null, true, ++sequence, now, gate.delayMillis());
+		pending.add(unlocked);
+		// Keep the unlock available for a late loot event even after its popup has started.
+		recentLoot.put(name.toLowerCase(Locale.ROOT), unlocked);
 	}
 	@Subscribe
 	public void onLootReceived(LootReceived e)
@@ -399,10 +397,19 @@ public class CelebrationPlugin extends Plugin
 			Celebration target = null;
 			for (Celebration c : pending.items())
 			{
-				if (c.newSlot && c.source == null && c.name.equalsIgnoreCase(name) && now - c.created < 2000)
+				if (c.newSlot && c.lootTick < 0 && c.name.equalsIgnoreCase(name))
 				{
 					target = c;
 					break;
+				}
+			}
+			if (target == null)
+			{
+				Celebration recent = recentLoot.get(name.toLowerCase(Locale.ROOT));
+				if (recent != null && recent.newSlot && recent.lootTick < 0 && now - recent.created < REWARD_MATCH_MS)
+				{
+					// Attaching the source consumes this match; another real drop gets its own popup.
+					target = recent;
 				}
 			}
 			if (target == null)
@@ -430,6 +437,11 @@ public class CelebrationPlugin extends Plugin
 				CollectionLedger.Entry count = ledger.get(id);
 				target.lastSyncedTotal = count == null ? null : count.quantity;
 				attachKc(target);
+				if (target.presented)
+				{
+					// Late source/item details update the visible popup without replaying it or its sound.
+					preparePresentation(target);
+				}
 			}
 		}
 	}
