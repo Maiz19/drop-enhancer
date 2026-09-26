@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 maiz. BSD-2-Clause; see LICENSE. */
 package com.collectioncelebrations;
 
+import java.awt.Rectangle;
 import java.util.Locale;
 import java.util.Set;
 import javax.inject.Inject;
@@ -8,8 +9,13 @@ import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayManager;
 
+/**
+ * Holds rewards only while a case reel is spinning. The reveal panel that follows can be
+ * dismissed whenever the player likes, so it no longer delays the popup or its sound.
+ */
 @Singleton
 class CaseGate
 {
@@ -17,11 +23,17 @@ class CaseGate
 	Client client;
 	@Inject
 	OverlayManager overlays;
-	private static final long MINIMUM_CASE_MILLIS = 10000;
+	// Time for a case to appear after its reward before the queue gives up waiting.
+	private static final long START_GRACE_MILLIS = 2000;
+	// Clue Case: casket drop (900) + opening (1450) + reel (4000). Its overlay reports no size.
+	private static final long CLUE_SPIN_MILLIS = 6500;
+	// Safety cap in case the Loot Case reel never reports that it stopped.
+	private static final long LOOT_SPIN_LIMIT_MILLIS = 10000;
 	private boolean clue;
 	private boolean loot;
-	private long minimumUntil;
-	private long indicatorUntil;
+	private Overlay lootOverlay;
+	private long graceUntil;
+	private long spinStarted;
 	private static final Set<String> LOOT_SOURCES =
 		Set.of("corrupted hunllef", "crystalline hunllef", "theatre of blood", "chambers of xeric", "tombs of amascut", "lunar chest",
 			   "barrows", "hallowed sepulchre grand coffin", "elven crystal chest", "chest (moon key)", "larran's big chest",
@@ -32,24 +44,29 @@ class CaseGate
 	}
 	void reset()
 	{
-		minimumUntil = 0;
-		indicatorUntil = 0;
+		graceUntil = 0;
+		spinStarted = 0;
 	}
 	void noteReward(String source)
 	{
 		String name = source == null ? "" : source.toLowerCase(Locale.ROOT);
 		if (((clue && name.startsWith("clue scroll")) || (loot && LOOT_SOURCES.contains(name))))
 		{
-			minimumUntil = Math.max(minimumUntil, now() + MINIMUM_CASE_MILLIS);
-			indicatorUntil = now() + 120000;
+			awaitCase();
 		}
 	}
 	void noteDoomInterface()
 	{
 		if (loot)
 		{
-			minimumUntil = Math.max(minimumUntil, now() + MINIMUM_CASE_MILLIS);
-			indicatorUntil = now() + 120000;
+			awaitCase();
+		}
+	}
+	private void awaitCase()
+	{
+		if (spinStarted == 0)
+		{
+			graceUntil = Math.max(graceUntil, now() + START_GRACE_MILLIS);
 		}
 	}
 
@@ -57,7 +74,15 @@ class CaseGate
 	{
 		// Identify case plugins by their public overlay names.
 		clue = overlays.anyMatch(o -> "ClueCaseOverlay".equals(o.getName()));
-		loot = overlays.anyMatch(o -> "LootCaseOpeningOverlay".equals(o.getName()));
+		lootOverlay = null;
+		loot = overlays.anyMatch(o -> {
+			if (!"LootCaseOpeningOverlay".equals(o.getName()))
+			{
+				return false;
+			}
+			lootOverlay = o;
+			return true;
+		});
 	}
 	boolean installed()
 	{
@@ -73,25 +98,28 @@ class CaseGate
 		{
 			return false;
 		}
-		if (now() < minimumUntil)
+		long now = now();
+		boolean clueSpin = clue && (hidden(InterfaceID.TrailRewardscreen.UNIVERSE) || hidden(InterfaceID.TrailRewardscreen.ITEMS));
+		boolean lootSpin = loot && lootReelVisible();
+		if (!clueSpin && !lootSpin)
 		{
-			return true;
+			spinStarted = 0;
+			return now < graceUntil;
 		}
-		if (clue && (hidden(InterfaceID.TrailRewardscreen.UNIVERSE) || hidden(InterfaceID.TrailRewardscreen.ITEMS)))
+		if (spinStarted == 0)
 		{
-			return true;
+			spinStarted = now;
+			graceUntil = 0;
 		}
-		boolean held =
-			(now() < indicatorUntil && (hidden(InterfaceID.NotificationDisplay.UNIVERSE) ||
-										(loot && (hidden(InterfaceID.Chatbox.UNIVERSE) || hidden(InterfaceID.Inventory.ITEMS))))) ||
-			(loot && (hidden(InterfaceID.BarrowsReward.UNIVERSE) || hidden(InterfaceID.PmoonReward.UNIVERSAL) ||
-					  hidden(InterfaceID.RaidsRewards.UNIVERSE) || hidden(InterfaceID.TobChests.UNIVERSE) ||
-					  hidden(InterfaceID.ToaChests.UNIVERSE) || hidden(InterfaceID.DomEndLevelUi.UNIVERSE)));
-		if (!held)
-		{
-			indicatorUntil = 0;
-		}
-		return held;
+		// Clue Case keeps the reward screen hidden until the result is dismissed, so its spin is timed.
+		return now - spinStarted < (lootSpin ? LOOT_SPIN_LIMIT_MILLIS : CLUE_SPIN_MILLIS);
+	}
+	private boolean lootReelVisible()
+	{
+		// RuneLite sizes an overlay from its last render: the reel is a wide strip, the reveal
+		// panel is taller than wide, and a closed case renders nothing.
+		Rectangle bounds = lootOverlay == null ? null : lootOverlay.getBounds();
+		return bounds != null && bounds.width > bounds.height;
 	}
 	private boolean hidden(int component)
 	{
