@@ -619,7 +619,7 @@ public class CelebrationFlowTest
 		when(p.wiki.entry(ITEM, NAME)).thenReturn(new WikiRarity.Entry(ITEM, NAME, 10.0, false, List.of()));
 		loot();
 		ArgumentCaptor<java.util.function.IntPredicate> predicate = ArgumentCaptor.forClass(java.util.function.IntPredicate.class);
-		verify(p.custom).onLootReceived(any(LootReceived.class), predicate.capture());
+		verify(p.custom).onLootReceived(any(LootReceived.class), predicate.capture(), anyLong());
 		assertTrue(predicate.getValue().test(ITEM));
 		p.time += 2500;
 		p.onBeforeRender(new BeforeRender());
@@ -860,7 +860,7 @@ public class CelebrationFlowTest
 		assertNull(c.lastSyncedTotal);
 		assertEquals(0, c.provisionalTotal);
 		ArgumentCaptor<java.util.function.IntPredicate> classifier = ArgumentCaptor.forClass(java.util.function.IntPredicate.class);
-		verify(p.custom).onLootReceived(any(), classifier.capture());
+		verify(p.custom).onLootReceived(any(), classifier.capture(), anyLong());
 		assertTrue(classifier.getValue().test(ITEM));
 	}
 
@@ -908,7 +908,7 @@ public class CelebrationFlowTest
 		assertTrue(c.extraItem);
 		assertEquals(2, c.dropQuantity);
 		ArgumentCaptor<java.util.function.IntPredicate> classifier = ArgumentCaptor.forClass(java.util.function.IntPredicate.class);
-		verify(p.custom).onLootReceived(any(), classifier.capture());
+		verify(p.custom).onLootReceived(any(), classifier.capture(), anyLong());
 		assertTrue(classifier.getValue().test(ITEM));
 	}
 
@@ -1315,7 +1315,7 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		p.onBeforeRender(new BeforeRender());
 		verify(p.overlay, never()).show(any(), anyLong());
-		verify(p.sounds).offerValue("CollectionLog.wav", 70, NAME);
+		verify(p.sounds).offerValue(eq("CollectionLog.wav"), eq(70), eq(NAME), anyLong());
 	}
 
 	@Test public void highlightedCollectionAudioStillWaitsForCaseRelease()
@@ -1323,10 +1323,10 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		when(p.gate.blocked()).thenReturn(true);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString());
+		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong());
 		when(p.gate.blocked()).thenReturn(false);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds).offerValue("CollectionLog.wav", 70, NAME);
+		verify(p.sounds).offerValue(eq("CollectionLog.wav"), eq(70), eq(NAME), anyLong());
 	}
 
 	@Test public void highlightedCollectionAudioHonoursExclusion()
@@ -1334,7 +1334,7 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		when(p.config.excludedPopupItems()).thenReturn(NAME);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString());
+		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong());
 	}
 
 	@Test public void highlightedCollectionAudioHonoursCollectionMute()
@@ -1342,6 +1342,48 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		when(p.config.collectionAudio()).thenReturn(false);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString());
+		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong());
+	}
+
+	@Test public void coffinUnlockDoesNotReplayDropSoundForOtherLoot()
+	{
+		for (boolean unlockFirst : new boolean[] {true, false})
+		{
+			setup();
+			int mark = 24711, runes = 566;
+			ItemComposition markItem = mock(ItemComposition.class);
+			when(markItem.getName()).thenReturn("Hallowed mark");
+			when(p.items.canonicalize(mark)).thenReturn(mark);
+			when(p.items.getItemComposition(mark)).thenReturn(markItem);
+			ItemComposition runeItem = mock(ItemComposition.class);
+			when(runeItem.getName()).thenReturn("Soul rune");
+			when(p.items.canonicalize(runes)).thenReturn(runes);
+			when(p.items.getItemComposition(runes)).thenReturn(runeItem);
+			when(p.items.getItemPrice(runes)).thenReturn(388);
+			when(p.gate.delayMillis()).thenReturn(0L);
+			p.custom = new CustomSoundEvents();
+			p.custom.config = p.config; p.custom.soundQueue = p.sounds; p.custom.itemManager = p.items;
+			p.custom.groundItemsConfig = mock(net.runelite.client.plugins.grounditems.GroundItemsConfig.class);
+			when(p.custom.groundItemsConfig.getHighlightItems()).thenReturn("");
+			when(p.custom.groundItemsConfig.lowValuePrice()).thenReturn(20_000);
+			when(p.custom.groundItemsConfig.mediumValuePrice()).thenReturn(100_000);
+			when(p.custom.groundItemsConfig.highValuePrice()).thenReturn(1_000_000);
+			when(p.custom.groundItemsConfig.insaneValuePrice()).thenReturn(10_000_000);
+			when(p.config.dropValueMode()).thenReturn(DropValueMode.GROUND_ITEMS);
+			when(p.config.lowValueSound()).thenReturn(true);
+			p.custom.startUp();
+			LootReceived coffin = new LootReceived("Hallowed Sepulchre Coffin", 0, LootRecordType.NPC,
+				List.of(new ItemStack(mark, 4), new ItemStack(runes, 210)), 1, null);
+			if (unlockFirst) { chat("New item added to your collection log: Hallowed mark"); }
+			p.onLootReceived(coffin);
+			ArgumentCaptor<Long> group = ArgumentCaptor.forClass(Long.class);
+			verify(p.sounds).offerValue(anyString(), anyInt(), eq("soul rune"), group.capture());
+			if (!unlockFirst) { chat("New item added to your collection log: Hallowed mark"); }
+			Celebration shown = release();
+			assertEquals("Hallowed mark", shown.name);
+			verify(p.sounds).playNow(eq("CollectionLog.wav"), anyInt());
+			// The popup already sounded for this coffin; the rune stack's value sound is dropped.
+			verify(p.sounds).cancelValueGroup(group.getValue());
+		}
 	}
 }

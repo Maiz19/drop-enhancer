@@ -378,7 +378,7 @@ public class CelebrationPlugin extends Plugin
 			String name = item == null ? "" : item.getName();
 			return ledger.get(id) != null || (name != null && knownLoggedNames.contains(name.toLowerCase(Locale.ROOT))) ||
 				wiki.entry(id, name) != null || popupIncluded(name, stacks.getOrDefault(id, 0));
-		});
+		}, rewardSequence);
 		for (Map.Entry<Integer, Integer> stack : stacks.entrySet())
 		{
 			int id = stack.getKey();
@@ -441,6 +441,10 @@ public class CelebrationPlugin extends Plugin
 				{
 					// Late source/item details update the visible popup without replaying it or its sound.
 					preparePresentation(target);
+					if (target.audible)
+					{
+						sounds.cancelValueGroup(rewardSequence);
+					}
 				}
 			}
 		}
@@ -807,6 +811,10 @@ public class CelebrationPlugin extends Plugin
 								sounds.playNow(config.unlockFile().trim(), unlockVolume);
 							}
 							lastAudioGroup = c.audioGroup;
+							c.audible = true;
+							// The popup sound covers the whole reward; other items in it must not
+							// replay a drop sound once this one finishes.
+							sounds.cancelValueGroup(c.audioGroup);
 						}
 					}
 				}
@@ -814,7 +822,7 @@ public class CelebrationPlugin extends Plugin
 					config.highlightedItemSound() && custom.highlighted(c.name, c.dropQuantity))
 				{
 					sounds.offerValue(custom.highlightedRewardFile(c.itemId, c.dropQuantity, c.tier),
-						custom.highlightedRewardVolume(c.itemId, c.dropQuantity, c.tier), c.name);
+						custom.highlightedRewardVolume(c.itemId, c.dropQuantity, c.tier), c.name, c.audioGroup);
 				}
 			}
 		}

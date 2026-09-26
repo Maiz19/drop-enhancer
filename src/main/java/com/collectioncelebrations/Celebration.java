@@ -27,6 +27,7 @@ final class Celebration
 	Double wikiCompletion;
 	String dropRateText;
 	long audioGroup;
+	boolean audible;
 	Celebration(String name, int itemId, int dropQuantity, String source, boolean newSlot, long sequence, long now, long delay)
 	{
 		this.name = name;

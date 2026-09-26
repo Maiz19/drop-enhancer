@@ -81,18 +81,35 @@ public class SoundQueueTest
 	@Test
 	public void lateUnlockCancelsOnlyMatchingValueSound() throws Exception
 	{
-		sounds.offerValue("test.wav", 50, "Mole claw");
-		sounds.offerValue("test.wav", 50, "Coins");
+		sounds.offerValue("test.wav", 50, "Mole claw", -1);
+		sounds.offerValue("test.wav", 50, "Coins", -1);
 		sounds.cancelValue("MOLE CLAW");
 		sounds.tick(Long.MAX_VALUE);
 		verify(audio, timeout(1000).times(1)).play(any(InputStream.class), anyFloat());
 	}
 
 	@Test
+	public void rewardPopupCancelsOnlyItsOwnValueSounds() throws Exception
+	{
+		sounds.offerValue("test.wav", 50, "Soul rune", 7);
+		sounds.offerValue("test.wav", 50, "Coins", 8);
+		sounds.offerValue("test.wav", 50, "Coins", -1);
+		sounds.cancelValueGroup(7);
+		sounds.cancelValueGroup(-1);
+		for (long clock = 100_000; clock <= 400_000; clock += 100_000)
+		{
+			doReturn(clock).when(sounds).monotonicMillis();
+			await(() -> !sounds.busy());
+			sounds.tick(Long.MAX_VALUE);
+		}
+		verify(sounds, times(2)).playNow("test.wav", 50);
+	}
+
+	@Test
 	public void valueAudioIsEligibleImmediatelyButRespectsCaseHold()
 	{
 		when(sounds.gate.delayMillis()).thenReturn(1200L);
-		sounds.offerValue("test.wav", 50, "Coins");
+		sounds.offerValue("test.wav", 50, "Coins", -1);
 		when(sounds.gate.blocked()).thenReturn(true);
 		sounds.tick(System.currentTimeMillis());
 		verify(sounds, never()).playNow(anyString(), anyInt());
@@ -119,7 +136,7 @@ public class SoundQueueTest
 	{
 		sounds.playNow("test.wav", 80);
 		verify(audio, timeout(1000)).play(any(InputStream.class), anyFloat());
-		sounds.offerValue("test.wav", 50, "Coins");
+		sounds.offerValue("test.wav", 50, "Coins", -1);
 		sounds.tick(Long.MAX_VALUE);
 		verify(audio, times(1)).play(any(InputStream.class), anyFloat());
 		doReturn(3000L).when(sounds).monotonicMillis();
@@ -186,7 +203,7 @@ public class SoundQueueTest
 	{
 		doNothing().when(sounds).playNow(anyString(), anyInt());
 		when(sounds.gate.blocked()).thenReturn(true);
-		for (int i = 0; i < 1000; i++) { sounds.offerValue("sound" + i + ".wav", 50, "Coins"); }
+		for (int i = 0; i < 1000; i++) { sounds.offerValue("sound" + i + ".wav", 50, "Coins", -1); }
 		sounds.tick(Long.MAX_VALUE);
 		verify(sounds, never()).playNow(anyString(), anyInt());
 		when(sounds.gate.blocked()).thenReturn(false);

@@ -52,7 +52,7 @@ public class CustomSoundEventsTest
 			clearInvocations(events.soundQueue);
 			when(events.itemManager.getItemPrice(1)).thenReturn(price);
 			events.onLootReceived(loot, id -> false);
-			verify(events.soundQueue).offerValue("custom-sounds-veryrare.wav", 50, "value test");
+			verify(events.soundQueue).offerValue("custom-sounds-veryrare.wav", 50, "value test", -1L);
 			verifyNoMoreInteractions(events.soundQueue);
 			org.junit.Assert.assertEquals("custom-sounds-veryrare.wav", events.highlightedRewardFile(1, 2, null));
 		}
@@ -95,7 +95,7 @@ public class CustomSoundEventsTest
 		when(events.itemManager.getItemComposition(1)).thenReturn(item);
 		when(events.itemManager.getItemPrice(1)).thenReturn(1000);
 		events.onLootReceived(new LootReceived("Test", 1, LootRecordType.NPC, List.of(new ItemStack(1, 2)), 1, null), id -> false);
-		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "value test");
+		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "value test", -1L);
 		verify(events.groundItemsConfig, never()).valueCalculationMode();
 	}
 	@Test
@@ -149,7 +149,7 @@ public class CustomSoundEventsTest
 		verifyNoInteractions(events.soundQueue);
 		when(events.config.dropValueMode()).thenReturn(DropValueMode.GE);
 		events.onLootReceived(loot, id -> false);
-		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "mithril sword");
+		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "mithril sword", -1L);
 	}
 
 	@Test
@@ -176,13 +176,13 @@ public class CustomSoundEventsTest
 			clearInvocations(events.soundQueue);
 			when(events.itemManager.getItemPrice(1)).thenReturn(unitPrices[n]);
 			events.onLootReceived(loot, id -> false);
-			verify(events.soundQueue).offerValue(files[n], 50, "value test");
+			verify(events.soundQueue).offerValue(files[n], 50, "value test", -1L);
 			verifyNoMoreInteractions(events.soundQueue);
 		}
 		clearInvocations(events.soundQueue);
 		when(events.groundItemsConfig.insaneValuePrice()).thenReturn(500);
 		events.onLootReceived(loot, id -> false);
-		verify(events.soundQueue).offerValue("custom-sounds-rare.wav", 50, "value test");
+		verify(events.soundQueue).offerValue("custom-sounds-rare.wav", 50, "value test", -1L);
 	}
 
 	@Test
@@ -203,7 +203,7 @@ public class CustomSoundEventsTest
 		verifyNoInteractions(events.soundQueue);
 		when(events.config.defaultValueSound()).thenReturn(true);
 		events.onLootReceived(loot, id -> false);
-		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "value test");
+		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "value test", -1L);
 	}
 
 	@Test
@@ -223,12 +223,12 @@ public class CustomSoundEventsTest
 		LootReceived loot = new LootReceived("Test", 1, LootRecordType.NPC, List.of(new ItemStack(1, 1)), 1, null);
 		events.onLootReceived(loot, id -> false);
 		verify(events.soundQueue)
-			.offerValue(TierStyle.file(PreviewTier.RARE, events.config), TierStyle.volume(PreviewTier.RARE, events.config), "value test");
-		verify(events.soundQueue).offerValue("shared-custom.wav", 20, "value test");
+			.offerValue(TierStyle.file(PreviewTier.RARE, events.config), TierStyle.volume(PreviewTier.RARE, events.config), "value test", -1L);
+		verify(events.soundQueue).offerValue("shared-custom.wav", 20, "value test", -1L);
 		clearInvocations(events.soundQueue);
 		when(events.config.soundEnabledRare()).thenReturn(false);
 		events.onLootReceived(loot, id -> false);
-		verify(events.soundQueue).offerValue("shared-custom.wav", 0, "value test");
+		verify(events.soundQueue).offerValue("shared-custom.wav", 0, "value test", -1L);
 	}
 
 	@Test
@@ -268,7 +268,7 @@ public class CustomSoundEventsTest
 			clearInvocations(events.soundQueue);
 			when(events.itemManager.getItemPrice(31086)).thenReturn(unitPrices[n]);
 			events.onLootReceived(loot, id -> false);
-			verify(events.soundQueue).offerValue(files[n], 50, "broken antler");
+			verify(events.soundQueue).offerValue(files[n], 50, "broken antler", -1L);
 			org.junit.Assert.assertEquals(files[n], events.highlightedRewardFile(31086, 2, null));
 			org.junit.Assert.assertEquals(50, events.highlightedRewardVolume(31086, 2, null));
 			verifyNoMoreInteractions(events.soundQueue);
@@ -289,11 +289,11 @@ public class CustomSoundEventsTest
 		when(events.itemManager.getItemPrice(1)).thenReturn(1000000);
 		LootReceived loot = new LootReceived("Test", 1, LootRecordType.NPC, List.of(new ItemStack(1, 2)), 1, null);
 		events.onLootReceived(loot, id -> false);
-		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "test item");
+		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "test item", -1L);
 		clearInvocations(events.soundQueue);
 		when(item.getHaPrice()).thenReturn(150);
 		events.onLootReceived(loot, id -> false);
-		verify(events.soundQueue).offerValue("custom-sounds-rare.wav", 50, "test item");
+		verify(events.soundQueue).offerValue("custom-sounds-rare.wav", 50, "test item", -1L);
 		clearInvocations(events.soundQueue);
 		when(events.config.highValueSound()).thenReturn(false);
 		events.onLootReceived(loot, id -> false);

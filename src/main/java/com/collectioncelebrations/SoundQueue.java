@@ -62,6 +62,7 @@ class SoundQueue
 		final long due;
 		final boolean reward;
 		String valueItemName;
+		long valueGroup = -1;
 		Request(String name, int volume, long due, boolean reward)
 		{
 			this.name = name;
@@ -116,7 +117,7 @@ class SoundQueue
 		}
 		waiting.add(new Request(name, volume, System.currentTimeMillis() + Math.max(delay, reward ? gate.delayMillis() : 0), reward));
 	}
-	void offerValue(String name, int volume, String itemName)
+	void offerValue(String name, int volume, String itemName, long group)
 	{
 		if (volume <= 0)
 		{
@@ -129,12 +130,18 @@ class SoundQueue
 		// Item identity is already known. Release at the next render callback; cases still gate playback.
 		Request request = new Request(name, volume, System.currentTimeMillis(), true);
 		request.valueItemName = itemName.toLowerCase(java.util.Locale.ROOT);
+		request.valueGroup = group;
 		waiting.add(request);
 	}
 	void cancelValue(String itemName)
 	{
 		String key = itemName.toLowerCase(java.util.Locale.ROOT);
 		waiting.removeIf(r -> key.equals(r.valueItemName));
+	}
+	/** A reward whose popup already played its sound should not follow it with value sounds. */
+	void cancelValueGroup(long group)
+	{
+		waiting.removeIf(r -> r.valueItemName != null && r.valueGroup >= 0 && r.valueGroup == group);
 	}
 	void tick(long now)
 	{

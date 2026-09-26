@@ -66,16 +66,21 @@ public class CustomSoundEvents
 
 	public void onLootReceived(LootReceived lootReceived, java.util.function.IntPredicate collectionItem)
 	{
+		onLootReceived(lootReceived, collectionItem, -1);
+	}
+
+	public void onLootReceived(LootReceived lootReceived, java.util.function.IntPredicate collectionItem, long group)
+	{
 		for (ItemStack stack : lootReceived.getItems())
 		{
 			// Noted and placeholder ids resolve to the tradeable item, so name, price and the
 			// collection check below all describe the same item the popup shows.
 			int id = itemManager.canonicalize(stack.getId());
-			handleItem(id, stack.getQuantity(), collectionItem.test(id));
+			handleItem(id, stack.getQuantity(), collectionItem.test(id), group);
 		}
 	}
 
-	private void handleItem(int id, int quantity, boolean collectionItem)
+	private void handleItem(int id, int quantity, boolean collectionItem, long group)
 	{
 		final ItemComposition itemComposition = itemManager.getItemComposition(id);
 		if (itemComposition == null || itemComposition.getName() == null || quantity <= 0)
@@ -129,7 +134,7 @@ public class CustomSoundEvents
 			String file = highlightedValueFile(value);
 			if (valueSoundEnabled(file))
 			{
-				playValueSound(file, name);
+				playValueSound(file, name, group);
 			}
 			return;
 		}
@@ -146,56 +151,56 @@ public class CustomSoundEvents
 			{
 				if (config.highestValueSound())
 				{
-					playValueSound(HIGHEST_SOUND_FILE, name);
+					playValueSound(HIGHEST_SOUND_FILE, name, group);
 				}
 			}
 			else if (value > groundItemsConfig.highValuePrice())
 			{
 				if (config.highValueSound())
 				{
-					playValueSound(HIGH_SOUND_FILE, name);
+					playValueSound(HIGH_SOUND_FILE, name, group);
 				}
 			}
 			else if (value > groundItemsConfig.mediumValuePrice())
 			{
 				if (config.mediumValueSound())
 				{
-					playValueSound(MEDIUM_SOUND_FILE, name);
+					playValueSound(MEDIUM_SOUND_FILE, name, group);
 				}
 			}
 			else if (value > groundItemsConfig.lowValuePrice())
 			{
 				if (config.lowValueSound())
 				{
-					playValueSound(LOW_SOUND_FILE, name);
+					playValueSound(LOW_SOUND_FILE, name, group);
 				}
 			}
 			else if (config.defaultValueSound())
 			{
-				playValueSound(DEFAULT_SOUND_FILE, name);
+				playValueSound(DEFAULT_SOUND_FILE, name, group);
 			}
 			return;
 		}
 
 		if (config.defaultValueSound() && value >= config.defaultStart() && value < config.defaultEnd())
 		{
-			playValueSound(DEFAULT_SOUND_FILE, name);
+			playValueSound(DEFAULT_SOUND_FILE, name, group);
 		}
 		if (config.lowValueSound() && value >= config.lowStart() && value < config.lowEnd())
 		{
-			playValueSound(LOW_SOUND_FILE, name);
+			playValueSound(LOW_SOUND_FILE, name, group);
 		}
 		if (config.mediumValueSound() && value >= config.mediumStart() && value < config.mediumEnd())
 		{
-			playValueSound(MEDIUM_SOUND_FILE, name);
+			playValueSound(MEDIUM_SOUND_FILE, name, group);
 		}
 		if (config.highValueSound() && value >= config.highStart() && value < config.highEnd())
 		{
-			playValueSound(HIGH_SOUND_FILE, name);
+			playValueSound(HIGH_SOUND_FILE, name, group);
 		}
 		if (config.highestValueSound() && value >= config.highestStart())
 		{
-			playValueSound(HIGHEST_SOUND_FILE, name);
+			playValueSound(HIGHEST_SOUND_FILE, name, group);
 		}
 	}
 
@@ -276,9 +281,9 @@ public class CustomSoundEvents
 			file.equals(MEDIUM_SOUND_FILE) ? config.mediumValueSound() : true;
 	}
 
-	private void playValueSound(String f, String itemName)
+	private void playValueSound(String f, String itemName, long group)
 	{
-		soundQueue.offerValue(eventFile(f), eventVolume(f), itemName);
+		soundQueue.offerValue(eventFile(f), eventVolume(f), itemName, group);
 	}
 	private void playSound(String f)
 	{
