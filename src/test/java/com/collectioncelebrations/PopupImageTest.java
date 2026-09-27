@@ -290,8 +290,11 @@ public class PopupImageTest
 		BufferedImage first = drawIcon(padded, 64, 32);
 		BufferedImage second = drawIcon(cropped, 64, 32);
 		assertArrayEquals(first.getRGB(0, 0, 100, 100, null, 0, 100), second.getRGB(0, 0, 100, 100, null, 0, 100));
-		assertNotEquals(0, first.getRGB(50, 25) >>> 24);
-		assertNotEquals(0, first.getRGB(50, 75) >>> 24);
+		// A whole 2x: the visible 10x20 covers exactly 20x40 around the centre.
+		assertNotEquals(0, first.getRGB(50, 30) >>> 24);
+		assertNotEquals(0, first.getRGB(50, 69) >>> 24);
+		assertEquals(0, first.getRGB(50, 29) >>> 24);
+		assertEquals(0, first.getRGB(50, 70) >>> 24);
 	}
 
 	@Test
@@ -328,6 +331,103 @@ public class PopupImageTest
 				assertTrue(visible > 0);
 			}
 		}
+	}
+
+	@Test
+	public void everyOutlineStyleKeepsHardEdges()
+	{
+		Celebration c = new Celebration("Ring of endurance (uncharged)", -1, 1, "Hallowed Sepulchre Grand Coffin", false, 0, 0, 0);
+		c.tier = PreviewTier.UNCOMMON;
+		c.confirmedTotal = 2;
+		c.kc = "Coffins: 12";
+		c.value = 12_500_000;
+		c.wikiCompletion = 2.9;
+		int[] black = new int[TextOutline.values().length];
+		for (TextOutline outline : TextOutline.values())
+		{
+			BufferedImage image = new BufferedImage(480, 260, BufferedImage.TYPE_INT_ARGB);
+			Graphics2D g = image.createGraphics();
+			CelebrationOverlay.drawPanel(g, 12, 10, 432, c, new java.awt.Color(0x99FF99), null, true, true, true, true,
+				new CelebrationConfig() { @Override public TextOutline textOutline() { return outline; } }, 1200);
+			g.dispose();
+			for (int y = 0; y < image.getHeight(); y++)
+			{
+				for (int x = 0; x < image.getWidth(); x++)
+				{
+					int argb = image.getRGB(x, y), alpha = argb >>> 24;
+					// Stretched mode enlarges these pixels, so a partly covered edge pixel would blur.
+					assertTrue(outline + " has a soft pixel", alpha == 0 || alpha == 255);
+					black[outline.ordinal()] += argb == 0xFF000000 ? 1 : 0;
+				}
+			}
+		}
+		// Only the text edge is pure black: none, a one-sided shadow, or a four-way outline.
+		assertEquals(0, black[TextOutline.NONE.ordinal()]);
+		assertTrue(black[TextOutline.SHADOW.ordinal()] > 0);
+		assertTrue(black[TextOutline.OUTLINE.ordinal()] > black[TextOutline.SHADOW.ordinal()]);
+		assertEquals(TextOutline.SHADOW, new CelebrationConfig() {}.textOutline());
+
+		// With the extra drop rate the tier name moves under the medallion, over bare scenery, and keeps a shadow.
+		c.dropRateText = "1/1,000";
+		BufferedImage image = new BufferedImage(480, 260, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = image.createGraphics();
+		CelebrationOverlay.drawPanel(g, 12, 10, 432, c, new java.awt.Color(0x99FF99), null, true, true, true, true,
+			new CelebrationConfig() { @Override public TextOutline textOutline() { return TextOutline.NONE; } }, 1200);
+		g.dispose();
+		boolean shadow = false;
+		for (int y = 180; y < image.getHeight(); y++)
+		{
+			for (int x = 0; x < image.getWidth(); x++)
+			{
+				shadow |= image.getRGB(x, y) == 0xFF000000;
+			}
+		}
+		assertTrue(shadow);
+	}
+
+	@Test
+	public void textUsesTheFontsOwnPixelSizes()
+	{
+		for (int size : new int[] {12, 13, 14, 16, 18, 24})
+		{
+			for (double scale = .6; scale <= 2; scale += .05)
+			{
+				assertTrue(CelebrationOverlay.pixelMultiple(size, scale) >= 1);
+			}
+		}
+		// At the default 90% scale the name stands out while statistics use the fonts' own size.
+		assertEquals(2, CelebrationOverlay.pixelMultiple(24, .9));
+		assertEquals(1, CelebrationOverlay.pixelMultiple(18, .9));
+		assertEquals(1, CelebrationOverlay.pixelMultiple(12, .9));
+		assertEquals(net.runelite.client.ui.FontManager.getRunescapeSmallFont(), CelebrationOverlay.pixelFont(12));
+		assertEquals(net.runelite.client.ui.FontManager.getRunescapeBoldFont(), CelebrationOverlay.pixelFont(24));
+	}
+
+	@Test
+	public void iconUsesWholePixelBlocks()
+	{
+		BufferedImage icon = new BufferedImage(36, 32, BufferedImage.TYPE_INT_ARGB);
+		for (int y = 0; y < 32; y++)
+		{
+			for (int x = 0; x < 36; x++)
+			{
+				icon.setRGB(x, y, (x + y) % 2 == 0 ? 0xFFFFFFFF : 0xFF000000);
+			}
+		}
+		BufferedImage image = new BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = image.createGraphics();
+		// Room for 2.45x rounds down to exactly 2x.
+		CelebrationOverlay.drawItemIcon(g, icon, 50, 50, 90, 60);
+		g.dispose();
+		for (int y = 0; y < 64; y++)
+		{
+			for (int x = 0; x < 72; x++)
+			{
+				assertEquals(icon.getRGB(x / 2, y / 2), image.getRGB(14 + x, 18 + y));
+			}
+		}
+		assertEquals(0, image.getRGB(13, 50) >>> 24);
+		assertEquals(0, image.getRGB(86, 50) >>> 24);
 	}
 
 	private BufferedImage drawIcon(BufferedImage icon, double maxSize, double radius)

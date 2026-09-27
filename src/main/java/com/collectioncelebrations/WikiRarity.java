@@ -133,10 +133,12 @@ class WikiRarity
 			catch (Exception ignored)
 			{
 			}
-			if (generation == session && config.refreshWikiData())
+			if (generation == session)
 			{
-				refreshCompletion(folder, session, forceRefresh);
-				refreshDropRates(folder, session, forceRefresh);
+				// Switching refreshes off stops requests only; downloaded data stays in use.
+				boolean download = config.refreshWikiData();
+				refreshCompletion(folder, session, forceRefresh, download);
+				refreshDropRates(folder, session, forceRefresh, download);
 			}
 		});
 	}
@@ -168,7 +170,7 @@ class WikiRarity
 		start(force);
 	}
 
-	private void refreshCompletion(Path folder, int session, boolean forceRefresh)
+	private void refreshCompletion(Path folder, int session, boolean forceRefresh, boolean download)
 	{
 		Path cache = folder.resolve("wiki-completion-cache.json");
 		long now = System.currentTimeMillis();
@@ -192,7 +194,7 @@ class WikiRarity
 		catch (Exception ignored)
 		{ /* A stale/local dataset stays usable while refreshing. */
 		}
-		if (generation != session)
+		if (!download || generation != session)
 		{
 			return;
 		}
@@ -240,7 +242,7 @@ class WikiRarity
 		}
 	}
 
-	private void refreshDropRates(Path folder, int session, boolean forceRefresh)
+	private void refreshDropRates(Path folder, int session, boolean forceRefresh, boolean download)
 	{
 		if (generation != session)
 		{
@@ -269,7 +271,7 @@ class WikiRarity
 		catch (Exception ignored)
 		{ /* Keep the existing rates if a cache is absent or damaged. */
 		}
-		if (generation != session)
+		if (!download || generation != session)
 		{
 			return;
 		}

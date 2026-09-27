@@ -21,9 +21,11 @@ Open pages of your collection log so the plugin can read your item quantities. T
 
 **Combination rarity** uses the value tier as a minimum, with Ground Items value thresholds linked by default. Wiki completion can raise the tier of cheaper items, but cannot lower an expensive drop below its value tier. Turn off **Link to Ground Items values** to use your own GP cutoffs. Untradeable items use rarity only; pets keep their Pet tier.
 
+**Sharp in stretched mode** — the popup is drawn on whole pixels in the RuneScape font, without anti-aliasing, so stretched mode enlarges it as hard pixels like the game's own interface. **Text outline** adds RuneLite's shadow or outline behind the text.
+
 **Custom sounds** — put an uncompressed PCM `.wav` (up to 32 MB) in `.runelite/collection-celebrations/sounds/` and enter its filename in the tier's WAV setting. Keep the default filename for the bundled sound, or leave it blank to mute the tier.
 
-**Refresh wiki data** — **on by default.** The plugin downloads public item lists, completion percentages and drop rates from `oldschool.runescape.wiki`, refreshed weekly on the Thursday after the Wednesday game update. This contacts a third-party server that is not controlled or verified by the RuneLite developers, so the wiki receives your IP address as it would for any web request. No player name, collection contents or other personal data is ever sent. Turn the setting off to stop all wiki requests; existing data is kept if a refresh fails. Wiki data is CC BY-NC-SA 3.0 by OSRS Wiki contributors and is not bundled with the plugin.
+**Refresh wiki data** — **on by default.** The plugin downloads public item lists, completion percentages and drop rates from `oldschool.runescape.wiki`, refreshed weekly on the Thursday after the Wednesday game update. This contacts a third-party server that is not controlled or verified by the RuneLite developers, so the wiki receives your IP address as it would for any web request. No player name, collection contents or other personal data is ever sent. Turn the setting off to stop all wiki requests; data that was already downloaded stays in use, and is also kept if a refresh fails. Wiki data is CC BY-NC-SA 3.0 by OSRS Wiki contributors and is not bundled with the plugin.
 
 **Hide CoX rewards** — on by default. Chambers of Xeric announces a unique while the team is still walking to the chest, so the chat line is censored and the popup and its sound wait until the reward chest is opened. Other raids send their collection log only after the chest and are unaffected.
 

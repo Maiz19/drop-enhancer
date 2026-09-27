@@ -1123,6 +1123,38 @@ public class CelebrationFlowTest
 	}
 
 	@Test
+	public void switchingTheOptionOnMidRaidStillHoldsTheNextUnique()
+	{
+		realCoxGate();
+		when(p.gate.blocked()).thenReturn(false);
+		net.runelite.client.events.ConfigChanged event = new net.runelite.client.events.ConfigChanged();
+		event.setGroup("collection-celebrations");
+		event.setKey("hideCoxRewards");
+		p.onConfigChanged(event);
+		queuedItem(1, "Twisted bow", RarityTier.RARE, 1000000, 1, true);
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, never()).show(any(), anyLong());
+		chestOpened();
+		assertEquals("Twisted bow", release().name);
+	}
+
+	@Test
+	public void aHeldUniqueKeepsTheGamesOwnPopupHiddenWithoutOurPopups()
+	{
+		realCoxGate();
+		when(p.config.showPopups()).thenReturn(false);
+		net.runelite.api.widgets.Widget frame = mock(net.runelite.api.widgets.Widget.class);
+		when(p.client.getWidget(net.runelite.api.gameval.InterfaceID.NotificationDisplay.FRAME)).thenReturn(frame);
+		nativeUnlock(NAME);
+		p.onBeforeRender(new BeforeRender());
+		verify(frame, never()).setHidden(true);
+		nativeUnlock("Twisted bow");
+		p.onBeforeRender(new BeforeRender());
+		verify(frame).setHidden(true);
+	}
+
+	@Test
 	public void openingTheChambersChestTellsTheGate()
 	{
 		net.runelite.api.events.WidgetLoaded event = new net.runelite.api.events.WidgetLoaded();
@@ -1286,6 +1318,23 @@ public class CelebrationFlowTest
 		assertEquals("Kills: 348", release().kc);
 	}
 
+	@Test public void grandCoffinCountComesFromTheCollectionLogTab()
+	{
+		int ring = 24844;
+		String name = "Ring of endurance (uncharged)";
+		ItemComposition item = mock(ItemComposition.class);
+		when(item.getName()).thenReturn(name);
+		when(p.items.canonicalize(ring)).thenReturn(ring);
+		when(p.items.getItemComposition(ring)).thenReturn(item);
+		when(p.wiki.entry(ring, name)).thenReturn(new WikiRarity.Entry(ring, name, 2.9, false, List.of("Hallowed Sepulchre")));
+		when(p.client.getTickCount()).thenReturn(70);
+		chat("You have opened the Grand Hallowed Coffin <col=ff0000>12</col> times!");
+		chat("New item added to your collection log: " + name);
+		p.onLootReceived(new LootReceived("Hallowed Sepulchre Grand Coffin", 0, LootRecordType.NPC,
+			List.of(new ItemStack(ring, 1)), 1, null));
+		assertEquals("Coffins: 12", release().kc);
+	}
+
 	@Test public void gauntletSourcesKeepNormalAndCorruptedCountsSeparate()
 	{
 		chat("Your Corrupted Gauntlet completion count is: 123.");
@@ -1315,7 +1364,7 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		p.onBeforeRender(new BeforeRender());
 		verify(p.overlay, never()).show(any(), anyLong());
-		verify(p.sounds).offerValue(eq("CollectionLog.wav"), eq(70), eq(NAME), anyLong());
+		verify(p.sounds).offerValue(eq("CollectionLog.wav"), eq(70), eq(NAME), anyLong(), anyInt());
 	}
 
 	@Test public void highlightedCollectionAudioStillWaitsForCaseRelease()
@@ -1323,10 +1372,10 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		when(p.gate.blocked()).thenReturn(true);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong());
+		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong(), anyInt());
 		when(p.gate.blocked()).thenReturn(false);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds).offerValue(eq("CollectionLog.wav"), eq(70), eq(NAME), anyLong());
+		verify(p.sounds).offerValue(eq("CollectionLog.wav"), eq(70), eq(NAME), anyLong(), anyInt());
 	}
 
 	@Test public void highlightedCollectionAudioHonoursExclusion()
@@ -1334,7 +1383,7 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		when(p.config.excludedPopupItems()).thenReturn(NAME);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong());
+		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong(), anyInt());
 	}
 
 	@Test public void highlightedCollectionAudioHonoursCollectionMute()
@@ -1342,7 +1391,7 @@ public class CelebrationFlowTest
 		prepareHighlightedCollectionDrop();
 		when(p.config.collectionAudio()).thenReturn(false);
 		p.onBeforeRender(new BeforeRender());
-		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong());
+		verify(p.sounds, never()).offerValue(anyString(), anyInt(), anyString(), anyLong(), anyInt());
 	}
 
 	@Test public void coffinUnlockDoesNotReplayDropSoundForOtherLoot()
@@ -1377,7 +1426,7 @@ public class CelebrationFlowTest
 			if (unlockFirst) { chat("New item added to your collection log: Hallowed mark"); }
 			p.onLootReceived(coffin);
 			ArgumentCaptor<Long> group = ArgumentCaptor.forClass(Long.class);
-			verify(p.sounds).offerValue(anyString(), anyInt(), eq("soul rune"), group.capture());
+			verify(p.sounds).offerValue(anyString(), anyInt(), eq("soul rune"), group.capture(), anyInt());
 			if (!unlockFirst) { chat("New item added to your collection log: Hallowed mark"); }
 			Celebration shown = release();
 			assertEquals("Hallowed mark", shown.name);
@@ -1385,5 +1434,90 @@ public class CelebrationFlowTest
 			// The popup already sounded for this coffin; the rune stack's value sound is dropped.
 			verify(p.sounds).cancelValueGroup(group.getValue());
 		}
+	}
+
+	private static class TimedGate extends CaseGate
+	{
+		long time = 1000;
+		@Override
+		long now()
+		{
+			return time;
+		}
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void caseRewardUnlockWaitsForItsLootEventBeforeSounding()
+	{
+		TimedGate gate = new TimedGate();
+		gate.client = p.client;
+		gate.overlays = mock(net.runelite.client.ui.overlay.OverlayManager.class);
+		net.runelite.client.ui.overlay.Overlay reel = mock(net.runelite.client.ui.overlay.Overlay.class);
+		java.awt.Rectangle bounds = new java.awt.Rectangle();
+		when(reel.getName()).thenReturn("LootCaseOpeningOverlay");
+		when(reel.getBounds()).thenReturn(bounds);
+		when(gate.overlays.anyMatch(any()))
+			.thenAnswer(i -> ((java.util.function.Predicate<net.runelite.client.ui.overlay.Overlay>)i.getArgument(0)).test(reel));
+		gate.refresh();
+		p.gate = gate;
+		int ring = 24844;
+		ItemComposition item = mock(ItemComposition.class);
+		when(item.getName()).thenReturn("Ring of endurance (uncharged)");
+		when(p.items.canonicalize(ring)).thenReturn(ring);
+		when(p.items.getItemComposition(ring)).thenReturn(item);
+		// The in-game loot tracker reports the Grand Hallowed Coffin a tick after the collection log message.
+		when(p.client.getTickCount()).thenReturn(50);
+		chat("New item added to your collection log: Ring of endurance (uncharged)");
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, never()).show(any(), anyLong());
+		when(p.client.getTickCount()).thenReturn(51);
+		p.onLootReceived(new LootReceived("Hallowed Sepulchre Grand Coffin", 0, LootRecordType.NPC,
+			List.of(new ItemStack(24711, 10), new ItemStack(ring, 1)), 1, null));
+		p.onBeforeRender(new BeforeRender());
+		bounds.setSize(620, 130);
+		gate.time += 3000;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, never()).show(any(), anyLong());
+		verify(p.sounds, never()).playNow(anyString(), anyInt());
+		// The reveal panel follows the reel; the spin is over.
+		bounds.setSize(320, 360);
+		p.onBeforeRender(new BeforeRender());
+		ArgumentCaptor<Celebration> shown = ArgumentCaptor.forClass(Celebration.class);
+		verify(p.overlay).show(shown.capture(), anyLong());
+		assertTrue(shown.getValue().newSlot);
+		assertEquals("Hallowed Sepulchre Grand Coffin", shown.getValue().source);
+		verify(p.sounds).playNow("CollectionLog.wav", 70);
+	}
+
+	@Test
+	public void unlockWithoutLootWaitsOnlyOneTickForACasePlugin()
+	{
+		when(p.gate.installed()).thenReturn(true);
+		when(p.client.getTickCount()).thenReturn(50);
+		chat("New item added to your collection log: " + NAME);
+		p.time += 1500;
+		p.onBeforeRender(new BeforeRender());
+		verify(p.overlay, never()).show(any(), anyLong());
+		when(p.client.getTickCount()).thenReturn(51);
+		assertTrue(release().newSlot);
+	}
+
+	@Test
+	public void oneChestSplitOverSeveralLootEventsSharesOneSoundGroup()
+	{
+		when(p.client.getTickCount()).thenReturn(80);
+		LootReceived coffin = new LootReceived("Hallowed Sepulchre Coffin", 0, LootRecordType.NPC, List.of(new ItemStack(ITEM, 1)), 1, null);
+		p.onLootReceived(coffin);
+		p.onLootReceived(coffin);
+		loot();
+		when(p.client.getTickCount()).thenReturn(81);
+		p.onLootReceived(coffin);
+		ArgumentCaptor<Long> groups = ArgumentCaptor.forClass(Long.class);
+		verify(p.custom, times(4)).onLootReceived(any(LootReceived.class), any(), groups.capture());
+		List<Long> group = groups.getAllValues();
+		assertEquals(group.get(0), group.get(1));
+		assertNotEquals(group.get(1), group.get(2));
+		assertNotEquals(group.get(0), group.get(3));
 	}
 }

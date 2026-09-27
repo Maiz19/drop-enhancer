@@ -91,7 +91,7 @@ public class CustomSoundEvents
 
 		if (!collectionItem && config.highlightedItemSound() && config.highlightSound() && highlighted(name, quantity))
 		{
-			playSound(HIGHLIGHTED_SOUND_FILE);
+			playValueSound(HIGHLIGHTED_SOUND_FILE, name, group);
 			return;
 		}
 
@@ -101,28 +101,28 @@ public class CustomSoundEvents
 
 		if (config.beginnerClueSound() && name.contains("clue scroll (beginner)"))
 		{
-			playSound(BEGINNER_CLUE_SOUND_FILE);
+			playValueSound(BEGINNER_CLUE_SOUND_FILE, name, group);
 		}
 		if (config.easyClueSound() && name.contains("clue scroll (easy)"))
 		{
-			playSound(EASY_CLUE_SOUND_FILE);
+			playValueSound(EASY_CLUE_SOUND_FILE, name, group);
 		}
 		if (config.mediumClueSound() && name.contains("clue scroll (medium)"))
 		{
-			playSound(MEDIUM_CLUE_SOUND_FILE);
+			playValueSound(MEDIUM_CLUE_SOUND_FILE, name, group);
 		}
 		if (config.hardClueSound() && name.contains("clue scroll (hard)"))
 		{
-			playSound(HARD_CLUE_SOUND_FILE);
+			playValueSound(HARD_CLUE_SOUND_FILE, name, group);
 		}
 
 		if (config.eliteClueSound() && name.contains("clue scroll (elite)"))
 		{
-			playSound(ELITE_CLUE_SOUND_FILE);
+			playValueSound(ELITE_CLUE_SOUND_FILE, name, group);
 		}
 		if (config.masterClueSound() && name.contains("clue scroll (master)"))
 		{
-			playSound(MASTER_CLUE_SOUND_FILE);
+			playValueSound(MASTER_CLUE_SOUND_FILE, name, group);
 		}
 
 		if (collectionItem)
@@ -281,13 +281,17 @@ public class CustomSoundEvents
 			file.equals(MEDIUM_SOUND_FILE) ? config.mediumValueSound() : true;
 	}
 
+	/** Offers the sound of a highlighted collection drop that shows no popup of its own. */
+	void offerHighlightedReward(int id, int quantity, PreviewTier rarity, String itemName, long group)
+	{
+		soundQueue.offerValue(highlightedRewardFile(id, quantity, rarity), highlightedRewardVolume(id, quantity, rarity), itemName, group,
+			eventTier(highlightedRewardEvent(id, quantity, rarity)).ordinal());
+	}
+
+	// Every drop sound joins its reward's group, so one loot event plays only its most notable sound.
 	private void playValueSound(String f, String itemName, long group)
 	{
-		soundQueue.offerValue(eventFile(f), eventVolume(f), itemName, group);
-	}
-	private void playSound(String f)
-	{
-		soundQueue.offer(eventFile(f), eventVolume(f), 0, true);
+		soundQueue.offerValue(eventFile(f), eventVolume(f), itemName, group, eventTier(f).ordinal());
 	}
 
 	private PreviewTier eventTier(String file)

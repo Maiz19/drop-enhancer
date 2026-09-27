@@ -81,8 +81,8 @@ public class SoundQueueTest
 	@Test
 	public void lateUnlockCancelsOnlyMatchingValueSound() throws Exception
 	{
-		sounds.offerValue("test.wav", 50, "Mole claw", -1);
-		sounds.offerValue("test.wav", 50, "Coins", -1);
+		sounds.offerValue("test.wav", 50, "Mole claw", -1, 0);
+		sounds.offerValue("test.wav", 50, "Coins", -1, 0);
 		sounds.cancelValue("MOLE CLAW");
 		sounds.tick(Long.MAX_VALUE);
 		verify(audio, timeout(1000).times(1)).play(any(InputStream.class), anyFloat());
@@ -91,9 +91,9 @@ public class SoundQueueTest
 	@Test
 	public void rewardPopupCancelsOnlyItsOwnValueSounds() throws Exception
 	{
-		sounds.offerValue("test.wav", 50, "Soul rune", 7);
-		sounds.offerValue("test.wav", 50, "Coins", 8);
-		sounds.offerValue("test.wav", 50, "Coins", -1);
+		sounds.offerValue("test.wav", 50, "Soul rune", 7, 0);
+		sounds.offerValue("test.wav", 50, "Coins", 8, 0);
+		sounds.offerValue("test.wav", 50, "Coins", -1, 0);
 		sounds.cancelValueGroup(7);
 		sounds.cancelValueGroup(-1);
 		for (long clock = 100_000; clock <= 400_000; clock += 100_000)
@@ -106,10 +106,40 @@ public class SoundQueueTest
 	}
 
 	@Test
+	public void oneRewardPlaysOnlyItsMostNotableDropSound()
+	{
+		doNothing().when(sounds).playNow(anyString(), anyInt());
+		sounds.offerValue("low.wav", 50, "Soul rune", 7, PreviewTier.COMMON.ordinal());
+		sounds.offerValue("clue.wav", 50, "Clue scroll (elite)", 7, PreviewTier.VERY_RARE.ordinal());
+		sounds.offerValue("medium.wav", 50, "Rune platebody", 7, PreviewTier.UNCOMMON.ordinal());
+		sounds.offerValue("other.wav", 50, "Coins", 8, PreviewTier.COMMON.ordinal());
+		for (int i = 0; i < 4; i++) { sounds.tick(Long.MAX_VALUE); }
+		// A second loot event of a reward that already sounded stays silent.
+		sounds.offerValue("late.wav", 50, "Blood rune", 7, PreviewTier.RARE.ordinal());
+		sounds.tick(Long.MAX_VALUE);
+		org.mockito.ArgumentCaptor<String> files = org.mockito.ArgumentCaptor.forClass(String.class);
+		verify(sounds, times(2)).playNow(files.capture(), eq(50));
+		assertEquals(java.util.List.of("clue.wav", "other.wav"), files.getAllValues());
+	}
+
+	@Test
+	public void rewardPopupAlsoSilencesDropSoundsThatArriveLater()
+	{
+		doNothing().when(sounds).playNow(anyString(), anyInt());
+		sounds.cancelValueGroup(7);
+		sounds.offerValue("late.wav", 50, "Soul rune", 7, 0);
+		sounds.offerValue("next.wav", 50, "Coins", 8, 0);
+		sounds.tick(Long.MAX_VALUE);
+		sounds.tick(Long.MAX_VALUE);
+		verify(sounds).playNow("next.wav", 50);
+		verify(sounds, never()).playNow(eq("late.wav"), anyInt());
+	}
+
+	@Test
 	public void valueAudioIsEligibleImmediatelyButRespectsCaseHold()
 	{
 		when(sounds.gate.delayMillis()).thenReturn(1200L);
-		sounds.offerValue("test.wav", 50, "Coins", -1);
+		sounds.offerValue("test.wav", 50, "Coins", -1, 0);
 		when(sounds.gate.blocked()).thenReturn(true);
 		sounds.tick(System.currentTimeMillis());
 		verify(sounds, never()).playNow(anyString(), anyInt());
@@ -136,7 +166,7 @@ public class SoundQueueTest
 	{
 		sounds.playNow("test.wav", 80);
 		verify(audio, timeout(1000)).play(any(InputStream.class), anyFloat());
-		sounds.offerValue("test.wav", 50, "Coins", -1);
+		sounds.offerValue("test.wav", 50, "Coins", -1, 0);
 		sounds.tick(Long.MAX_VALUE);
 		verify(audio, times(1)).play(any(InputStream.class), anyFloat());
 		doReturn(3000L).when(sounds).monotonicMillis();
@@ -199,11 +229,88 @@ public class SoundQueueTest
 	}
 
 	@Test
+	public void stalledSoundDoesNotSilenceLaterSounds() throws Exception
+	{
+		CompletableFuture<Void> entered = new CompletableFuture<>(), release = new CompletableFuture<>();
+		doAnswer(call -> {
+			if (entered.complete(null))
+			{
+				release.get(2, TimeUnit.SECONDS);
+			}
+			return call.callRealMethod();
+		}).when(sounds).load(any(java.io.File.class));
+		try
+		{
+			sounds.playNow("test.wav", 80);
+			entered.get(1, TimeUnit.SECONDS);
+			doReturn(7000L).when(sounds).monotonicMillis();
+			assertFalse(sounds.busy());
+			sounds.playNow("test.wav", 50);
+			verify(audio, timeout(1000)).play(any(InputStream.class), eq(20f * (float)Math.log10(.5)));
+		}
+		finally { release.complete(null); }
+	}
+
+	@Test
+	public void backToBackSoundsAreTimedOneByOne() throws Exception
+	{
+		java.util.concurrent.Semaphore entered = new java.util.concurrent.Semaphore(0), proceed = new java.util.concurrent.Semaphore(0);
+		doAnswer(call -> {
+			entered.release();
+			proceed.tryAcquire(2, TimeUnit.SECONDS);
+			return call.callRealMethod();
+		}).when(sounds).load(any(java.io.File.class));
+		doReturn(10_000L).when(sounds).monotonicMillis();
+		sounds.playNow("test.wav", 80);
+		sounds.playNow("test.wav", 50);
+		assertTrue(entered.tryAcquire(1, TimeUnit.SECONDS));
+		doReturn(14_000L).when(sounds).monotonicMillis();
+		assertTrue(sounds.busy());
+		proceed.release();
+		assertTrue(entered.tryAcquire(1, TimeUnit.SECONDS));
+		// Eight seconds after the first sound began, but the second has only been loading for four.
+		doReturn(18_000L).when(sounds).monotonicMillis();
+		assertTrue(sounds.busy());
+		proceed.release();
+		verify(audio, timeout(1000).times(2)).play(any(InputStream.class), anyFloat());
+	}
+
+	@Test
+	public void repeatedStallsTurnAudioOffUntilRestart() throws Exception
+	{
+		java.util.concurrent.Semaphore entered = new java.util.concurrent.Semaphore(0);
+		CompletableFuture<Void> release = new CompletableFuture<>();
+		doAnswer(call -> {
+			entered.release();
+			release.get(5, TimeUnit.SECONDS);
+			return call.callRealMethod();
+		}).when(sounds).load(any(java.io.File.class));
+		try
+		{
+			for (long stall = 1; stall <= 3; stall++)
+			{
+				doReturn(stall * 10_000).when(sounds).monotonicMillis();
+				sounds.playNow("test.wav", 80);
+				assertTrue(entered.tryAcquire(1, TimeUnit.SECONDS));
+				doReturn(stall * 10_000 + 6000).when(sounds).monotonicMillis();
+				assertFalse(sounds.busy());
+			}
+			sounds.playNow("test.wav", 80);
+			assertFalse(entered.tryAcquire(300, TimeUnit.MILLISECONDS));
+			release.complete(null);
+			sounds.start();
+			sounds.playNow("test.wav", 80);
+			verify(audio, timeout(1000).times(1)).play(any(InputStream.class), anyFloat());
+		}
+		finally { release.complete(null); }
+	}
+
+	@Test
 	public void burstDuringHoldKeepsLatest128InOrder()
 	{
 		doNothing().when(sounds).playNow(anyString(), anyInt());
 		when(sounds.gate.blocked()).thenReturn(true);
-		for (int i = 0; i < 1000; i++) { sounds.offerValue("sound" + i + ".wav", 50, "Coins", -1); }
+		for (int i = 0; i < 1000; i++) { sounds.offerValue("sound" + i + ".wav", 50, "Coins", -1, 0); }
 		sounds.tick(Long.MAX_VALUE);
 		verify(sounds, never()).playNow(anyString(), anyInt());
 		when(sounds.gate.blocked()).thenReturn(false);

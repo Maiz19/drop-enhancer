@@ -109,9 +109,13 @@ public class CelebrationPlugin extends Plugin
 	private long sequence;
 	private boolean notificationStarted;
 	private String replacedNotification;
+	private String replacedItem;
 	private final Set<String> notifiedUnlocks = new HashSet<>();
 	private int lastKcTick = -1;
 	private long lastAudioGroup = -1;
+	private String lastLootSource;
+	private int lastLootTick = -1;
+	private long lastLootGroup = -1;
 	long now()
 	{
 		return System.currentTimeMillis();
@@ -125,6 +129,7 @@ public class CelebrationPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		migrateTextOutline(configManager);
 		reset();
 		wiki.start();
 		sounds.start();
@@ -146,6 +151,21 @@ public class CelebrationPlugin extends Plugin
 		reset();
 		restorePaint();
 	}
+	/** Text used to have anti-aliased modes. The popup is always crisp now, so only its outline carries over. */
+	static void migrateTextOutline(ConfigManager configManager)
+	{
+		String legacy = configManager.getConfiguration("collection-celebrations", "textRenderMode");
+		if (legacy == null)
+		{
+			return;
+		}
+		if (configManager.getConfiguration("collection-celebrations", "textOutline") == null)
+		{
+			configManager.setConfiguration("collection-celebrations", "textOutline",
+				"SMOOTH_OUTLINED".equals(legacy) ? TextOutline.SHADOW : TextOutline.NONE);
+		}
+		configManager.unsetConfiguration("collection-celebrations", "textRenderMode");
+	}
 	private void reset()
 	{
 		previews.clear();
@@ -162,9 +182,13 @@ public class CelebrationPlugin extends Plugin
 		sequence = 0;
 		notificationStarted = false;
 		replacedNotification = null;
+		replacedItem = null;
 		notifiedUnlocks.clear();
 		lastKcTick = -1;
 		lastAudioGroup = -1;
+		lastLootSource = null;
+		lastLootTick = -1;
+		lastLootGroup = -1;
 	}
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged e)
@@ -209,6 +233,7 @@ public class CelebrationPlugin extends Plugin
 			{
 				notificationStarted = true;
 				replacedNotification = null;
+				replacedItem = null;
 				restorePaint();
 			}
 			else if (e.getScriptId() == ScriptID.NOTIFICATION_DELAY && notificationStarted)
@@ -224,6 +249,7 @@ public class CelebrationPlugin extends Plugin
 					{
 						unlock(name);
 						replacedNotification = main;
+						replacedItem = name;
 					}
 				}
 			}
@@ -346,6 +372,7 @@ public class CelebrationPlugin extends Plugin
 		}
 		int id = names.getOrDefault(name.toLowerCase(Locale.ROOT), -1);
 		Celebration unlocked = new Celebration(name, id, 1, null, true, ++sequence, now, gate.delayMillis());
+		unlocked.unlockTick = client.getTickCount();
 		pending.add(unlocked);
 		// Keep the unlock available for a late loot event even after its popup has started.
 		recentLoot.put(name.toLowerCase(Locale.ROOT), unlocked);
@@ -363,6 +390,13 @@ public class CelebrationPlugin extends Plugin
 
 		long now = now();
 		long rewardSequence = ++sequence;
+		// A chest can arrive as several loot events on one tick; they still share one sound.
+		int tick = client.getTickCount();
+		boolean sameReward = tick == lastLootTick && e.getName() != null && e.getName().equals(lastLootSource);
+		long audioGroup = sameReward ? lastLootGroup : rewardSequence;
+		lastLootSource = e.getName();
+		lastLootTick = tick;
+		lastLootGroup = audioGroup;
 		Map<Integer, Integer> stacks = new LinkedHashMap<>();
 		for (ItemStack stack : e.getItems())
 		{
@@ -378,7 +412,7 @@ public class CelebrationPlugin extends Plugin
 			String name = item == null ? "" : item.getName();
 			return ledger.get(id) != null || (name != null && knownLoggedNames.contains(name.toLowerCase(Locale.ROOT))) ||
 				wiki.entry(id, name) != null || popupIncluded(name, stacks.getOrDefault(id, 0));
-		}, rewardSequence);
+		}, audioGroup);
 		for (Map.Entry<Integer, Integer> stack : stacks.entrySet())
 		{
 			int id = stack.getKey();
@@ -429,8 +463,8 @@ public class CelebrationPlugin extends Plugin
 			if (target != null)
 			{
 				recentLoot.put(name.toLowerCase(Locale.ROOT), target);
-				target.audioGroup = rewardSequence;
-				target.lootTick = client.getTickCount();
+				target.audioGroup = audioGroup;
+				target.lootTick = tick;
 				target.itemId = id;
 				target.source = e.getName();
 				target.dropQuantity = stack.getValue();
@@ -443,7 +477,7 @@ public class CelebrationPlugin extends Plugin
 					preparePresentation(target);
 					if (target.audible)
 					{
-						sounds.cancelValueGroup(rewardSequence);
+						sounds.cancelValueGroup(audioGroup);
 					}
 				}
 			}
@@ -562,7 +596,11 @@ public class CelebrationPlugin extends Plugin
 		{
 			// Switching the option off must put back every line it blanked, chest or no chest.
 			// This arrives on the Swing thread, and the chat may only be touched on the client one.
-			clientThread.invoke(cox::noteChestOpened);
+			// Switching it on mid-raid must not count as the chest, or this raid would never hold.
+			if (!config.hideCoxRewards())
+			{
+				clientThread.invoke(cox::noteChestOpened);
+			}
 			return;
 		}
 		if ("refreshWikiData".equals(event.getKey()))
@@ -711,6 +749,12 @@ public class CelebrationPlugin extends Plugin
 				}
 			}
 		}
+		// Some counts name the collection log tab instead of the loot event, like the Sepulchre coffins.
+		WikiRarity.Entry entry = wiki.entry(c.itemId, c.name);
+		if (entry != null)
+		{
+			sourceNames.addAll(entry.tabs);
+		}
 		KillCountTracker.RecentKill kill = kills.killCountFor(sourceNames);
 		if (kill != null)
 		{
@@ -744,7 +788,7 @@ public class CelebrationPlugin extends Plugin
 					.thenComparingInt(n -> priorities.computeIfAbsent(n, this::rarityPriority))
 					.thenComparingLong(n -> values.computeIfAbsent(n, this::valuePriority));
 				// A Chambers unique waits for its chest; everything else behind it still goes through.
-				c = pending.poll(n -> now >= n.due && !cox.holds(n), order);
+				c = pending.poll(n -> now >= n.due && !cox.holds(n) && !awaitingLoot(n), order);
 			}
 			if (c == null && pending.size() == 0)
 			{
@@ -821,8 +865,7 @@ public class CelebrationPlugin extends Plugin
 				else if (!popupExcluded(c) && c.previewTier == null && config.collectionAudio() &&
 					config.highlightedItemSound() && custom.highlighted(c.name, c.dropQuantity))
 				{
-					sounds.offerValue(custom.highlightedRewardFile(c.itemId, c.dropQuantity, c.tier),
-						custom.highlightedRewardVolume(c.itemId, c.dropQuantity, c.tier), c.name, c.audioGroup);
+					custom.offerHighlightedReward(c.itemId, c.dropQuantity, c.tier, c.name, c.audioGroup);
 				}
 			}
 		}
@@ -838,7 +881,9 @@ public class CelebrationPlugin extends Plugin
 			hiddenPaint.clear();
 		}
 		// Only replace collection-log paint; never change game popup settings or the root used by case plugins.
-		if (config.showPopups() && replacedNotification != null &&
+		// A held Chambers unique stays hidden even with our own popups off, or the game's would spoil it.
+		boolean heldUnique = cox.holding() && cox.covers(replacedItem);
+		if ((config.showPopups() || heldUnique) && replacedNotification != null &&
 			replacedNotification.equals(client.getVarcStrValue(VarClientID.NOTIFICATION_MAIN)) &&
 			"Collection log".equalsIgnoreCase(client.getVarcStrValue(VarClientID.NOTIFICATION_TITLE)))
 		{
@@ -865,6 +910,14 @@ public class CelebrationPlugin extends Plugin
 		{
 			restorePaint();
 		}
+	}
+	/**
+	 * The collection log message can come a tick before the loot event that starts a case reel, so
+	 * with a case plugin installed an unlock waits for that tick instead of sounding before the hold.
+	 */
+	private boolean awaitingLoot(Celebration c)
+	{
+		return c.lootTick < 0 && c.unlockTick >= 0 && client.getTickCount() <= c.unlockTick && gate.installed();
 	}
 	int unlockVolume(PreviewTier tier)
 	{

@@ -1,12 +1,13 @@
 /* Copyright (c) 2026 maiz. BSD-2-Clause; see LICENSE. */
 package com.collectioncelebrations;
-public enum TextRenderMode
+/** The dark edge behind popup text, in the two styles RuneLite's own overlays use. */
+public enum TextOutline
 {
-	CRISP("Crisp"),
-	SMOOTH("Smooth"),
-	SMOOTH_OUTLINED("Smooth outlined");
+	NONE("None"),
+	SHADOW("Shadow"),
+	OUTLINE("Outline");
 	private final String label;
-	TextRenderMode(String label)
+	TextOutline(String label)
 	{
 		this.label = label;
 	}

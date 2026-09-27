@@ -3,8 +3,9 @@ package com.collectioncelebrations;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.util.Iterator;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +35,11 @@ class SoundQueue
 	private volatile int previewGeneration;
 	private volatile long openingSince;
 	private AtomicInteger pendingAudio = new AtomicInteger();
+	// A device that stalls this often is given up on rather than holding a thread per sound.
+	private static final int MAX_STALLS = 3;
+	private int stalls;
+	// Recent rewards that have had their sound; any later drop sound for one of them is dropped.
+	private final Deque<Long> spokenGroups = new ArrayDeque<>();
 
 	long monotonicMillis()
 	{
@@ -44,11 +50,19 @@ class SoundQueue
 	{
 		if (worker != null && pendingAudio.get() > 0 && monotonicMillis() - openingSince > 5000)
 		{
+			// Abandon the stalled sound and carry on with a fresh worker.
 			generation++;
 			previewGeneration++;
 			worker.shutdownNow();
 			worker = null;
-			log.debug("Audio device did not respond; audio suspended until plugin restart");
+			if (++stalls < MAX_STALLS)
+			{
+				startWorker();
+			}
+			else
+			{
+				log.warn("Audio device keeps stalling; Drop Enhancer audio is off until the plugin restarts");
+			}
 		}
 		long now = monotonicMillis();
 		playingUntil.removeIf(deadline -> now >= deadline);
@@ -63,6 +77,7 @@ class SoundQueue
 		final boolean reward;
 		String valueItemName;
 		long valueGroup = -1;
+		int priority;
 		Request(String name, int volume, long due, boolean reward)
 		{
 			this.name = name;
@@ -72,6 +87,12 @@ class SoundQueue
 		}
 	}
 	void start()
+	{
+		stalls = 0;
+		startWorker();
+	}
+
+	private void startWorker()
 	{
 		pendingAudio = new AtomicInteger();
 		worker = Executors.newSingleThreadExecutor(r -> {
@@ -85,6 +106,7 @@ class SoundQueue
 	{
 		generation++;
 		waiting.clear();
+		spokenGroups.clear();
 		cancelPreview();
 	}
 
@@ -117,9 +139,10 @@ class SoundQueue
 		}
 		waiting.add(new Request(name, volume, System.currentTimeMillis() + Math.max(delay, reward ? gate.delayMillis() : 0), reward));
 	}
-	void offerValue(String name, int volume, String itemName, long group)
+	/** @param priority the sound's tier ordinal; a reward's items play only their highest one */
+	void offerValue(String name, int volume, String itemName, long group, int priority)
 	{
-		if (volume <= 0)
+		if (volume <= 0 || (group >= 0 && spokenGroups.contains(group)))
 		{
 			return;
 		}
@@ -131,6 +154,7 @@ class SoundQueue
 		Request request = new Request(name, volume, System.currentTimeMillis(), true);
 		request.valueItemName = itemName.toLowerCase(java.util.Locale.ROOT);
 		request.valueGroup = group;
+		request.priority = priority;
 		waiting.add(request);
 	}
 	void cancelValue(String itemName)
@@ -141,19 +165,45 @@ class SoundQueue
 	/** A reward whose popup already played its sound should not follow it with value sounds. */
 	void cancelValueGroup(long group)
 	{
-		waiting.removeIf(r -> r.valueItemName != null && r.valueGroup >= 0 && r.valueGroup == group);
+		if (group < 0)
+		{
+			return;
+		}
+		if (!spokenGroups.contains(group))
+		{
+			if (spokenGroups.size() == 32)
+			{
+				spokenGroups.removeFirst();
+			}
+			spokenGroups.addLast(group);
+		}
+		waiting.removeIf(r -> r.valueItemName != null && r.valueGroup == group);
 	}
 	void tick(long now)
 	{
-		Iterator<Request> it = waiting.iterator();
-		while (it.hasNext())
+		for (Request r : waiting)
 		{
-			Request r = it.next();
 			if (!busy() && now >= r.due && (!r.reward || !gate.blocked()))
 			{
-				it.remove();
-				playNow(r.name, r.volume);
-				break;
+				Request chosen = r;
+				if (r.valueItemName != null && r.valueGroup >= 0)
+				{
+					// One drop sound per reward: its most notable item speaks for the rest.
+					for (Request other : waiting)
+					{
+						if (other.valueItemName != null && other.valueGroup == r.valueGroup && other.priority > chosen.priority)
+						{
+							chosen = other;
+						}
+					}
+					cancelValueGroup(r.valueGroup);
+				}
+				else
+				{
+					waiting.remove(r);
+				}
+				playNow(chosen.name, chosen.volume);
+				return;
 			}
 		}
 	}
@@ -197,6 +247,8 @@ class SoundQueue
 			openingSince = monotonicMillis();
 		}
 		worker.execute(() -> {
+			// Timed per sound, so several healthy sounds in a row never look like one stalled sound.
+			openingSince = monotonicMillis();
 			try
 			{
 				playLayer(name, volume, session, token, preview);

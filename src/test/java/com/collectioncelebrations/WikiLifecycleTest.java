@@ -244,6 +244,42 @@ public class WikiLifecycleTest
 	}
 
 	@Test
+	public void downloadedDataStaysInUseWithRefreshingSwitchedOff() throws Exception
+	{
+		WikiRarity first = create();
+		first.remote.http = new okhttp3.OkHttpClient.Builder().addInterceptor(this::response).build();
+		when(first.config.refreshWikiData()).thenReturn(true);
+		try { first.start(); awaitCache(first); }
+		finally { first.stop(); }
+		// Even a cache from before the weekly cutoff is better than no data at all.
+		java.nio.file.Path completion = first.dataDirectory.resolve("wiki-completion-cache.json");
+		java.nio.file.Files.writeString(completion,
+			java.nio.file.Files.readString(completion).replaceFirst("\"fetchedAt\":\\d+", "\"fetchedAt\":1"));
+		assertTrue(java.nio.file.Files.readString(completion).contains("\"fetchedAt\":1,"));
+		WikiRarity second = create();
+		second.dataDirectory = first.dataDirectory;
+		java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+		second.remote.http = new okhttp3.OkHttpClient.Builder().addInterceptor(chain -> {
+			calls.incrementAndGet();
+			throw new java.io.IOException("Offline");
+		}).build();
+		when(second.config.refreshWikiData()).thenReturn(false);
+		try
+		{
+			second.start();
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+			while ((second.dropRateText("Boss", "Example") == null || second.entry(1, "Example") == null) && System.nanoTime() < deadline)
+			{
+				Thread.sleep(10);
+			}
+			assertEquals("1/512", second.dropRateText("Boss", "Example"));
+			assertEquals(Double.valueOf(50), second.entry(1, "Example").completion);
+			assertEquals(0, calls.get());
+		}
+		finally { second.stop(); }
+	}
+
+	@Test
 	public void disablingDuringDropDownloadCancelsWithoutReplacingCachedRates() throws Exception
 	{
 		WikiRarity wiki = create();

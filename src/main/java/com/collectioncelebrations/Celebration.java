@@ -20,6 +20,8 @@ final class Celebration
 	Integer lastSyncedTotal;
 	String kc;
 	int lootTick = -1;
+	// Game tick of the collection log message that created this popup, before any loot joined it.
+	int unlockTick = -1;
 	PreviewTier previewTier;
 	PreviewTier tier;
 	long value;

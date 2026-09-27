@@ -150,14 +150,11 @@ class CelebrationOverlay extends Overlay
 		{
 			g.translate(x, y);
 			Layout l = new Layout(width / (double)WIDTH, config);
-			boolean crisp = config.textRenderMode() == TextRenderMode.CRISP;
-			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-							   crisp ? RenderingHints.VALUE_TEXT_ANTIALIAS_OFF : RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-			g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS,
-							   crisp ? RenderingHints.VALUE_FRACTIONALMETRICS_OFF : RenderingHints.VALUE_FRACTIONALMETRICS_ON);
-			g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL,
-							   crisp ? RenderingHints.VALUE_STROKE_DEFAULT : RenderingHints.VALUE_STROKE_PURE);
+			// Every edge lands on whole pixels, so stretched mode scales the popup up as hard pixels.
+			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+			g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+			g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_DEFAULT);
 			if (accent == null)
 			{
 				accent = new Color(221, 190, 125);
@@ -307,9 +304,10 @@ class CelebrationOverlay extends Overlay
 				}
 			}
 			// With the extra statistic the tier name sits under the medallion, outside the frame and
-			// over bare scenery, so it is outlined there whatever the text rendering mode.
+			// over bare scenery, so it keeps at least a shadow there whatever the outline setting.
+			TextOutline outline = config.textOutline();
 			l.center(g, c.tier == null ? "" : c.tier.toString(), 240, extraDropRate ? 229 : 117, 14, accent, 100,
-					 extraDropRate || config.textRenderMode() == TextRenderMode.SMOOTH_OUTLINED);
+					 extraDropRate && outline == TextOutline.NONE ? TextOutline.SHADOW : outline);
 		}
 		finally
 		{
@@ -351,6 +349,11 @@ class CelebrationOverlay extends Overlay
 			}
 		}
 		double scale = Math.min(maxSize / Math.max(width, height), Math.max(0, safeRadius - 1) / extent);
+		if (scale >= 1)
+		{
+			// Every sprite pixel becomes the same square block, like the game's own icons.
+			scale = Math.floor(scale);
+		}
 		int drawWidth = Math.max(1, (int)Math.floor(width * scale));
 		int drawHeight = Math.max(1, (int)Math.floor(height * scale));
 		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
@@ -454,6 +457,19 @@ class CelebrationOverlay extends Overlay
 								 cy - Math.max(1, r / 3)},
 					  8);
 	}
+	/**
+	 * The RuneScape fonts draw pixel for pixel at 16px and at whole multiples of it, so popup text
+	 * uses only those sizes: bold for the name, headings and values, small for the rest.
+	 */
+	static Font pixelFont(int size)
+	{
+		return size >= 14 ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont();
+	}
+	static int pixelMultiple(int size, double scale)
+	{
+		// Leans towards the larger multiple, so the item name still stands out at the default scale.
+		return Math.max(1, (int)Math.round(size * scale / 16 + .2));
+	}
 	private static final class Layout
 	{
 		final double scale;
@@ -469,20 +485,27 @@ class CelebrationOverlay extends Overlay
 		}
 		float f(double value)
 		{
-			return (float)Math.max(.5, value * scale);
+			// Strokes stay whole pixels wide.
+			return Math.max(1, Math.round(value * scale));
 		}
 		void center(Graphics2D g, String value, int x, int y, int size, Color colour, int maxWidth)
 		{
-			center(g, value, x, y, size, colour, maxWidth, config.textRenderMode() == TextRenderMode.SMOOTH_OUTLINED);
+			center(g, value, x, y, size, colour, maxWidth, config.textOutline());
 		}
-		void center(Graphics2D g, String value, int x, int y, int size, Color colour, int maxWidth, boolean outlined)
+		void center(Graphics2D g, String value, int x, int y, int size, Color colour, int maxWidth, TextOutline outline)
 		{
-			Font base = FontManager.getRunescapeBoldFont();
-			g.setFont(base.deriveFont(f(size)));
 			int width = p(maxWidth);
-			while (g.getFontMetrics().stringWidth(value) > width && size > 12)
+			Font base = pixelFont(size);
+			int multiple = pixelMultiple(size, scale);
+			g.setFont(base.deriveFont(16f * multiple));
+			while (multiple > 1 && g.getFontMetrics().stringWidth(value) > width)
 			{
-				g.setFont(base.deriveFont(f(--size)));
+				g.setFont(base.deriveFont(16f * --multiple));
+			}
+			if (g.getFontMetrics().stringWidth(value) > width)
+			{
+				base = FontManager.getRunescapeSmallFont();
+				g.setFont(base.deriveFont(16f));
 			}
 			if (g.getFontMetrics().stringWidth(value) > width)
 			{
@@ -492,14 +515,25 @@ class CelebrationOverlay extends Overlay
 				}
 				value += "…";
 			}
+			// Centre the capitals where the design centres them, whatever size the text became.
+			int capCentre = base == FontManager.getRunescapeSmallFont() ? 6 : 7;
+			int baseline = (int)Math.round((y - .4375 * size) * scale) + capCentre * multiple;
 			int left = p(x) - g.getFontMetrics().stringWidth(value) / 2;
-			if (outlined)
+			// The same shadow and four-way outline as RuneLite's own overlay text, one font pixel wide.
+			g.setColor(Color.BLACK);
+			if (outline == TextOutline.OUTLINE)
 			{
-				g.setColor(Color.BLACK);
-				g.drawString(value, left + Math.max(1, p(1)), p(y) + Math.max(1, p(1)));
+				g.drawString(value, left, baseline - multiple);
+				g.drawString(value, left, baseline + multiple);
+				g.drawString(value, left - multiple, baseline);
+				g.drawString(value, left + multiple, baseline);
+			}
+			else if (outline == TextOutline.SHADOW)
+			{
+				g.drawString(value, left + multiple, baseline + multiple);
 			}
 			g.setColor(colour);
-			g.drawString(value, left, p(y));
+			g.drawString(value, left, baseline);
 		}
 	}
 }

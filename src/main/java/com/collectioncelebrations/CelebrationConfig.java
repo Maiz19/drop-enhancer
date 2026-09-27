@@ -114,7 +114,7 @@ public interface CelebrationConfig extends Config
 
 	@Range(max = 100)
 	@ConfigItem(keyName = "masterVolume", name = "Master Volume", description = "Master volume for collection and drop sounds",
-				position = 3, section = celebrations)
+				position = 4, section = celebrations)
 	default int masterVolume()
 	{
 		return 50;
@@ -555,11 +555,13 @@ public interface CelebrationConfig extends Config
 		return PopupStat.WIKI_COMPLETION;
 	}
 
-	@ConfigItem(keyName = "textRenderMode", name = "Text rendering",
-				description = "Crisp text, smooth text, or smooth text with a dark outline", section = appearance, position = 6)
-	default TextRenderMode textRenderMode()
+	@ConfigItem(keyName = "textOutline", name = "Text outline",
+				description = "Dark edge behind the popup text. The popup is always drawn on whole pixels in the RuneScape font, "
+							  + "so it stays sharp in stretched mode.",
+				section = appearance, position = 6)
+	default TextOutline textOutline()
 	{
-		return TextRenderMode.SMOOTH_OUTLINED;
+		return TextOutline.SHADOW;
 	}
 	@Range(min = 10, max = 60)
 	@ConfigItem(keyName = "backgroundDarkness", name = "Background brightness (%)",
@@ -690,7 +692,7 @@ public interface CelebrationConfig extends Config
 
 	@ConfigItem(keyName = "includedPopupItems", name = "Included popup items",
 		description = "Comma-separated names, * wildcards and stack quantity rules. Includes extra items and overrides global/per-tier repeat switches. Exclusions take priority; popup and audio master settings still apply.",
-		section = rarity, position = 32)
+		section = rarity, position = 36)
 	default String includedPopupItems()
 	{
 		return "";
@@ -698,7 +700,7 @@ public interface CelebrationConfig extends Config
 
 	@ConfigItem(keyName = "excludedPopupItems", name = "Excluded popup items",
 		description = "Comma-separated names; supports * wildcards and quantities, e.g. Mystic *, Rune arrow < 100. Suppresses new/repeat popups and their collection audio. Tests still show. Shift-right-click ground items to add/remove exact names.",
-		section = rarity, position = 31)
+		section = rarity, position = 35)
 	default String excludedPopupItems()
 	{
 		return "";
