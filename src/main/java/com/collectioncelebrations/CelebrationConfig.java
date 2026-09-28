@@ -316,7 +316,7 @@ public interface CelebrationConfig extends Config
 				position = 2)
 	default int popupScale()
 	{
-		return 90;
+		return 75;
 	}
 
 	@ConfigItem(keyName = "showItemIcon", name = "Show item image", description = "Show the RuneLite item sprite", section = appearance,

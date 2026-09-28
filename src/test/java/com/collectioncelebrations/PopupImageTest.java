@@ -9,6 +9,71 @@ import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
 public class PopupImageTest
 {
+	/** Crisp popups: a filled polygon lost the star's right and bottom points; the pixel star is the same on every side. */
+	@Test
+	public void starsAreTheSameOnEverySideWithAllFourPoints()
+	{
+		for (int r = 1; r <= 12; r++)
+		{
+			int w = Math.max(1, (int)Math.round(r / 3.0));
+			assertTrue(CelebrationOverlay.inStar(r, 0, r, w) && CelebrationOverlay.inStar(-r, 0, r, w)
+				&& CelebrationOverlay.inStar(0, r, r, w) && CelebrationOverlay.inStar(0, -r, r, w));
+			assertFalse(CelebrationOverlay.inStar(r + 1, 0, r, w) || CelebrationOverlay.inStar(r, 1, r, w));
+			for (int dy = -r; dy <= r; dy++)
+			{
+				for (int dx = -r; dx <= r; dx++)
+				{
+					boolean in = CelebrationOverlay.inStar(dx, dy, r, w);
+					assertEquals(in, CelebrationOverlay.inStar(-dx, dy, r, w));
+					assertEquals(in, CelebrationOverlay.inStar(dx, -dy, r, w));
+					assertEquals(in, CelebrationOverlay.inStar(dy, dx, r, w));
+				}
+			}
+		}
+	}
+
+	/** The rarity's twinkles slide in with the panel; the ring around the medallion comes and grows with it. */
+	@Test
+	public void rarityEffectShowsDuringTheSlideAndItsRingWithTheMedallion()
+	{
+		assertEquals(0, CelebrationOverlay.iconPop(CelebrationOverlay.SLIDE_MS - 1), 0);
+		assertEquals(.4, CelebrationOverlay.iconPop(CelebrationOverlay.SLIDE_MS), 1e-9);
+		assertEquals(1, CelebrationOverlay.iconPop(CelebrationOverlay.SLIDE_MS + CelebrationOverlay.ICON_MS), 1e-9);
+		Celebration c = new Celebration("Dragon warhammer", -1, 1, "Lizardman shaman", false, 0, 0, 0);
+		c.tier = PreviewTier.VERY_RARE;
+		CelebrationConfig plain = new CelebrationConfig()
+		{
+			@Override
+			public boolean tierEffects()
+			{
+				return false;
+			}
+		};
+		assertNotEquals("twinkles during the slide", 0, differentPixels(c, 300, new CelebrationConfig() {}, plain));
+	}
+	private static int differentPixels(Celebration c, long elapsed, CelebrationConfig a, CelebrationConfig b)
+	{
+		BufferedImage[] images = new BufferedImage[2];
+		CelebrationConfig[] configs = {a, b};
+		for (int i = 0; i < 2; i++)
+		{
+			images[i] = new BufferedImage(480, 234, BufferedImage.TYPE_INT_ARGB);
+			Graphics2D g = images[i].createGraphics();
+			CelebrationOverlay.drawPanel(g, 0, 0, 480, c, new java.awt.Color(186, 104, 255), null, true, true, true, true,
+				configs[i], elapsed);
+			g.dispose();
+		}
+		int count = 0;
+		for (int y = 0; y < 234; y++)
+		{
+			for (int x = 0; x < 480; x++)
+			{
+				count += images[0].getRGB(x, y) != images[1].getRGB(x, y) ? 1 : 0;
+			}
+		}
+		return count;
+	}
+
 	@Test
 	public void fifthStatisticKeepsAllFourExistingStatisticsAndCanBeHidden()
 	{

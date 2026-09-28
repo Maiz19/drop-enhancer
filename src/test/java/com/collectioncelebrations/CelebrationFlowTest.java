@@ -107,8 +107,8 @@ public class CelebrationFlowTest
 				when(item.isGeTradeable()).thenReturn(true);
 				when(p.items.getItemComposition(anyInt())).thenReturn(item);
 				when(p.items.canonicalize(id)).thenReturn(id);
-				when(p.items.getItemPrice(anyInt())).thenReturn(100_000_000);
-				when(p.items.getItemPrice(id)).thenReturn(price);
+				when(p.items.getItemPrice(anyInt())).thenReturn(100_000_000L);
+				when(p.items.getItemPrice(id)).thenReturn((long) price);
 				RarityResolver resolver = new RarityResolver(p.items, p.config, new DropRateResolver());
 				net.runelite.client.plugins.grounditems.GroundItemsConfig ground =
 					mock(net.runelite.client.plugins.grounditems.GroundItemsConfig.class);
@@ -920,7 +920,7 @@ public class CelebrationFlowTest
 		when(item.getHaPrice()).thenReturn(price / 2);
 		when(p.items.canonicalize(id)).thenReturn(id);
 		when(p.items.getItemComposition(id)).thenReturn(item);
-		when(p.items.getItemPrice(id)).thenReturn(price);
+		when(p.items.getItemPrice(id)).thenReturn((long) price);
 		when(p.wiki.entry(id, name)).thenReturn(new WikiRarity.Entry(id, name, null, false, List.of()));
 		when(p.wiki.resolve(id, name)).thenReturn(new RarityResult(tier, id, price, false, null, null, 0, 0, 0, 0, 0, price / 2));
 		p.onLootReceived(new LootReceived("Chest", 1, LootRecordType.NPC, List.of(new ItemStack(id, quantity)), 1, null));
@@ -1408,7 +1408,7 @@ public class CelebrationFlowTest
 			when(runeItem.getName()).thenReturn("Soul rune");
 			when(p.items.canonicalize(runes)).thenReturn(runes);
 			when(p.items.getItemComposition(runes)).thenReturn(runeItem);
-			when(p.items.getItemPrice(runes)).thenReturn(388);
+			when(p.items.getItemPrice(runes)).thenReturn(388L);
 			when(p.gate.delayMillis()).thenReturn(0L);
 			p.custom = new CustomSoundEvents();
 			p.custom.config = p.config; p.custom.soundQueue = p.sounds; p.custom.itemManager = p.items;

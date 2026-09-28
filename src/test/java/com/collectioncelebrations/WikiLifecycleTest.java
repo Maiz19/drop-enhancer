@@ -17,10 +17,15 @@ public class WikiLifecycleTest
 	@Rule
 	public TemporaryFolder folder = new TemporaryFolder();
 
+	private static java.nio.file.Path path(net.runelite.client.util.Filepath folder)
+	{
+		return net.runelite.client.util.Filepath.Unchecked.getPath(folder);
+	}
+
 	private WikiRarity create() throws Exception
 	{
 		WikiRarity wiki = new WikiRarity();
-		wiki.dataDirectory = folder.newFolder().toPath();
+		wiki.dataDirectory = net.runelite.client.util.Filepath.Unchecked.getRooted(folder.newFolder().toPath());
 		wiki.gson = new Gson();
 		wiki.config = mock(CelebrationConfig.class, CALLS_REAL_METHODS);
 		wiki.remote = new WikiCompletionClient();
@@ -64,7 +69,7 @@ public class WikiLifecycleTest
 
 	private void awaitCache(WikiRarity wiki) throws Exception
 	{
-		java.nio.file.Path cache = wiki.dataDirectory.resolve("wiki-drop-rates-cache.json");
+		java.nio.file.Path cache = path(wiki.dataDirectory).resolve("wiki-drop-rates-cache.json");
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
 		while (!java.nio.file.Files.exists(cache) && System.nanoTime() < deadline) { Thread.sleep(10); }
 		assertTrue("Drop-rate cache was not written", java.nio.file.Files.exists(cache));
@@ -97,8 +102,8 @@ public class WikiLifecycleTest
 		WikiRarity wiki = create();
 		wiki.remote.http = new okhttp3.OkHttpClient.Builder().addInterceptor(this::response).build();
 		when(wiki.config.refreshWikiData()).thenReturn(true);
-		java.nio.file.Files.createDirectories(wiki.dataDirectory);
-		java.nio.file.Path cache = wiki.dataDirectory.resolve("wiki-drop-rates-cache.json");
+		java.nio.file.Files.createDirectories(path(wiki.dataDirectory));
+		java.nio.file.Path cache = path(wiki.dataDirectory).resolve("wiki-drop-rates-cache.json");
 		// Written today, but by a build whose rates were formatted differently.
 		java.nio.file.Files.writeString(cache, "{\"fetchedAt\":" + System.currentTimeMillis()
 			+ ",\"rates\":{\"Boss\":{\"Example\":\"1/9,999\"}}}");
@@ -252,7 +257,7 @@ public class WikiLifecycleTest
 		try { first.start(); awaitCache(first); }
 		finally { first.stop(); }
 		// Even a cache from before the weekly cutoff is better than no data at all.
-		java.nio.file.Path completion = first.dataDirectory.resolve("wiki-completion-cache.json");
+		java.nio.file.Path completion = path(first.dataDirectory).resolve("wiki-completion-cache.json");
 		java.nio.file.Files.writeString(completion,
 			java.nio.file.Files.readString(completion).replaceFirst("\"fetchedAt\":\\d+", "\"fetchedAt\":1"));
 		assertTrue(java.nio.file.Files.readString(completion).contains("\"fetchedAt\":1,"));
@@ -304,7 +309,7 @@ public class WikiLifecycleTest
 		{
 			wiki.start();
 			awaitCache(wiki);
-			java.nio.file.Path cache = wiki.dataDirectory.resolve("wiki-drop-rates-cache.json");
+			java.nio.file.Path cache = path(wiki.dataDirectory).resolve("wiki-drop-rates-cache.json");
 			String original = java.nio.file.Files.readString(cache);
 			block.set(true);
 			wiki.refreshSetting();

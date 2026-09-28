@@ -50,7 +50,7 @@ public class CustomSoundEventsTest
 		for (int price : new int[]{5000000, 500000000, Integer.MAX_VALUE})
 		{
 			clearInvocations(events.soundQueue);
-			when(events.itemManager.getItemPrice(1)).thenReturn(price);
+			when(events.itemManager.getItemPrice(1)).thenReturn((long) price);
 			events.onLootReceived(loot, id -> false);
 			verify(events.soundQueue).offerValue("custom-sounds-veryrare.wav", 50, "value test", -1L, PreviewTier.VERY_RARE.ordinal());
 			verifyNoMoreInteractions(events.soundQueue);
@@ -93,7 +93,7 @@ public class CustomSoundEventsTest
 		when(item.getName()).thenReturn("Value test");
 		when(item.getHaPrice()).thenReturn(100);
 		when(events.itemManager.getItemComposition(1)).thenReturn(item);
-		when(events.itemManager.getItemPrice(1)).thenReturn(1000);
+		when(events.itemManager.getItemPrice(1)).thenReturn(1000L);
 		events.onLootReceived(new LootReceived("Test", 1, LootRecordType.NPC, List.of(new ItemStack(1, 2)), 1, null), id -> false);
 		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "value test", -1L, PreviewTier.COMMON.ordinal());
 		verify(events.groundItemsConfig, never()).valueCalculationMode();
@@ -174,7 +174,7 @@ public class CustomSoundEventsTest
 		for (int n = 0; n < unitPrices.length; n++)
 		{
 			clearInvocations(events.soundQueue);
-			when(events.itemManager.getItemPrice(1)).thenReturn(unitPrices[n]);
+			when(events.itemManager.getItemPrice(1)).thenReturn((long) unitPrices[n]);
 			events.onLootReceived(loot, id -> false);
 			verify(events.soundQueue).offerValue(files[n], 50, "value test", -1L, n);
 			verifyNoMoreInteractions(events.soundQueue);
@@ -197,7 +197,7 @@ public class CustomSoundEventsTest
 		ItemComposition item = mock(ItemComposition.class);
 		when(item.getName()).thenReturn("Value test");
 		when(events.itemManager.getItemComposition(1)).thenReturn(item);
-		when(events.itemManager.getItemPrice(1)).thenReturn(100);
+		when(events.itemManager.getItemPrice(1)).thenReturn(100L);
 		LootReceived loot = new LootReceived("Test", 1, LootRecordType.NPC, List.of(new ItemStack(1, 1)), 1, null);
 		events.onLootReceived(loot, id -> false);
 		verifyNoInteractions(events.soundQueue);
@@ -219,7 +219,7 @@ public class CustomSoundEventsTest
 		ItemComposition item = mock(ItemComposition.class);
 		when(item.getName()).thenReturn("Value test");
 		when(events.itemManager.getItemComposition(1)).thenReturn(item);
-		when(events.itemManager.getItemPrice(1)).thenReturn(200);
+		when(events.itemManager.getItemPrice(1)).thenReturn(200L);
 		LootReceived loot = new LootReceived("Test", 1, LootRecordType.NPC, List.of(new ItemStack(1, 1)), 1, null);
 		events.onLootReceived(loot, id -> false);
 		verify(events.soundQueue)
@@ -268,7 +268,7 @@ public class CustomSoundEventsTest
 		for (int n = 0; n < unitPrices.length; n++)
 		{
 			clearInvocations(events.soundQueue);
-			when(events.itemManager.getItemPrice(31086)).thenReturn(unitPrices[n]);
+			when(events.itemManager.getItemPrice(31086)).thenReturn((long) unitPrices[n]);
 			events.onLootReceived(loot, id -> false);
 			verify(events.soundQueue).offerValue(files[n], 50, "broken antler", -1L, tiers[n]);
 			org.junit.Assert.assertEquals(files[n], events.highlightedRewardFile(31086, 2, null));
@@ -288,7 +288,7 @@ public class CustomSoundEventsTest
 		ItemComposition item = mock(ItemComposition.class);
 		when(item.getName()).thenReturn("Test item");
 		when(events.itemManager.getItemComposition(1)).thenReturn(item);
-		when(events.itemManager.getItemPrice(1)).thenReturn(1000000);
+		when(events.itemManager.getItemPrice(1)).thenReturn(1000000L);
 		LootReceived loot = new LootReceived("Test", 1, LootRecordType.NPC, List.of(new ItemStack(1, 2)), 1, null);
 		events.onLootReceived(loot, id -> false);
 		verify(events.soundQueue).offerValue("custom-sounds-common.wav", 50, "test item", -1L, PreviewTier.COMMON.ordinal());
@@ -337,7 +337,7 @@ public class CustomSoundEventsTest
 		org.junit.Assert.assertEquals(50, events.highlightedRewardVolume(1, 1, PreviewTier.RARE));
 		when(events.config.soundEnabledRare()).thenReturn(false);
 		org.junit.Assert.assertEquals(0, events.highlightedRewardVolume(1, 1, PreviewTier.RARE));
-		when(events.itemManager.getItemPrice(1)).thenReturn(400);
+		when(events.itemManager.getItemPrice(1)).thenReturn(400L);
 		org.junit.Assert.assertEquals("custom-sounds-veryrare.wav", events.highlightedRewardFile(1, 1, PreviewTier.UNCOMMON));
 		org.junit.Assert.assertEquals("drop-enhancer-pet.wav", events.highlightedRewardFile(1, 1, PreviewTier.PET));
 	}
@@ -354,7 +354,7 @@ public class CustomSoundEventsTest
 		ItemComposition platebody = mock(ItemComposition.class);
 		when(platebody.getName()).thenReturn("Rune platebody");
 		when(events.itemManager.getItemComposition(2)).thenReturn(platebody);
-		when(events.itemManager.getItemPrice(2)).thenReturn(38_000);
+		when(events.itemManager.getItemPrice(2)).thenReturn(38_000L);
 		events.onLootReceived(new LootReceived("Hallowed Sepulchre Grand Coffin", 0, LootRecordType.NPC,
 			List.of(new ItemStack(1, 1), new ItemStack(2, 1)), 1, null), id -> false, 5);
 		verify(events.soundQueue).offerValue("custom-sounds-veryrare.wav", 50, "clue scroll (elite)", 5L, PreviewTier.VERY_RARE.ordinal());

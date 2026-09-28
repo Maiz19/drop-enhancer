@@ -7,9 +7,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.Gson;
 import java.io.Reader;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -26,7 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import net.runelite.client.RuneLite;
+import net.runelite.client.util.Filepath;
 
 /** Wiki population statistics never establish the player's own membership. */
 @Singleton
@@ -50,7 +48,8 @@ class WikiRarity
 	private volatile long lastForced;
 	private ExecutorService loader;
 	private volatile int generation;
-	Path dataDirectory = RuneLite.RUNELITE_DIR.toPath().resolve("collection-celebrations/data");
+	/** The plugin directory's data folder: optional local data and the wiki caches. Set by the plugin before start. */
+	Filepath dataDirectory;
 	static final class Entry
 	{
 		final int id;
@@ -99,8 +98,8 @@ class WikiRarity
 			return t;
 		});
 		loader.execute(() -> {
-			Path folder = dataDirectory;
-			try (Reader reader = Files.newBufferedReader(folder.resolve("collection-log.json"), StandardCharsets.UTF_8))
+			Filepath folder = dataDirectory;
+			try (Reader reader = folder.joinSegment("collection-log.json").openBufferedReader())
 			{
 				Map<Integer, Entry> loaded = parse(gson.fromJson(reader, JsonObject.class));
 				installCurrent(loaded, session);
@@ -108,7 +107,7 @@ class WikiRarity
 			catch (Exception ignored)
 			{ /* Missing/unreadable data is displayed as unavailable. */
 			}
-			try (Reader reader = Files.newBufferedReader(folder.resolve("drop-rates.json"), StandardCharsets.UTF_8))
+			try (Reader reader = folder.joinSegment("drop-rates.json").openBufferedReader())
 			{
 				Map<String, Map<String, Double>> loaded = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 				gson.fromJson(reader, JsonObject.class).entrySet().forEach(source -> {
@@ -170,11 +169,11 @@ class WikiRarity
 		start(force);
 	}
 
-	private void refreshCompletion(Path folder, int session, boolean forceRefresh, boolean download)
+	private void refreshCompletion(Filepath folder, int session, boolean forceRefresh, boolean download)
 	{
-		Path cache = folder.resolve("wiki-completion-cache.json");
+		Filepath cache = folder.joinSegment("wiki-completion-cache.json");
 		long now = System.currentTimeMillis();
-		try (Reader reader = Files.newBufferedReader(cache, StandardCharsets.UTF_8))
+		try (Reader reader = cache.openBufferedReader())
 		{
 			JsonObject saved = gson.fromJson(reader, JsonObject.class);
 			Map<Integer, Entry> loaded = parse(saved.getAsJsonObject("items"));
@@ -213,27 +212,7 @@ class WikiRarity
 			saved.addProperty("license", "https://creativecommons.org/licenses/by-nc-sa/3.0/");
 			saved.addProperty("changes", "Joined item list and completion percentages by item ID");
 			saved.add("items", data);
-			Files.createDirectories(folder);
-			Path temporary = Files.createTempFile(folder, "wiki-completion-", ".tmp");
-			try
-			{
-				// Streamed, not rendered to a String first: the drop cache runs to megabytes.
-				try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8))
-				{
-					gson.toJson(saved, writer);
-				}
-				synchronized (this)
-				{
-					if (generation == session)
-					{
-						Files.move(temporary, cache, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-					}
-				}
-			}
-			finally
-			{
-				Files.deleteIfExists(temporary);
-			}
+			write(folder, "wiki-completion-", cache, saved, session);
 		}
 		catch (Exception failure)
 		{
@@ -242,15 +221,15 @@ class WikiRarity
 		}
 	}
 
-	private void refreshDropRates(Path folder, int session, boolean forceRefresh, boolean download)
+	private void refreshDropRates(Filepath folder, int session, boolean forceRefresh, boolean download)
 	{
 		if (generation != session)
 		{
 			return;
 		}
-		Path cache = folder.resolve("wiki-drop-rates-cache.json");
+		Filepath cache = folder.joinSegment("wiki-drop-rates-cache.json");
 		long now = System.currentTimeMillis();
-		try (Reader reader = Files.newBufferedReader(cache, StandardCharsets.UTF_8))
+		try (Reader reader = cache.openBufferedReader())
 		{
 			JsonObject saved = gson.fromJson(reader, JsonObject.class);
 			// A cache written by an older build holds differently formatted rates, not merely older
@@ -290,32 +269,38 @@ class WikiRarity
 			saved.addProperty("license", "https://creativecommons.org/licenses/by-nc-sa/3.0/");
 			saved.addProperty("changes", "Source and item lookup; formatted rates, roll counts and ambiguity labels");
 			saved.add("rates", loaded.toJson(gson));
-			Files.createDirectories(folder);
-			Path temporary = Files.createTempFile(folder, "wiki-drop-rates-", ".tmp");
-			try
-			{
-				// Streamed, not rendered to a String first: the drop cache runs to megabytes.
-				try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8))
-				{
-					gson.toJson(saved, writer);
-				}
-				synchronized (this)
-				{
-					if (generation == session)
-					{
-						Files.move(temporary, cache, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-					}
-				}
-			}
-			finally
-			{
-				Files.deleteIfExists(temporary);
-			}
+			write(folder, "wiki-drop-rates-", cache, saved, session);
 		}
 		catch (Exception failure)
 		{
 			org.slf4j.LoggerFactory.getLogger(WikiRarity.class)
 				.debug("Wiki drop rate refresh unavailable; keeping existing data", failure);
+		}
+	}
+
+	/** Through a temporary file moved over {@code cache}, only while this session is still the current one. */
+	private void write(Filepath folder, String prefix, Filepath cache, JsonObject saved, int session) throws Exception
+	{
+		folder.createDirectories();
+		Filepath temporary = folder.createTempFile(prefix, ".tmp");
+		try
+		{
+			// Streamed, not rendered to a String first: the drop cache runs to megabytes.
+			try (Writer writer = temporary.openBufferedWriter())
+			{
+				gson.toJson(saved, writer);
+			}
+			synchronized (this)
+			{
+				if (generation == session)
+				{
+					temporary.moveTo(cache, StandardCopyOption.REPLACE_EXISTING);
+				}
+			}
+		}
+		finally
+		{
+			temporary.deleteIfExists();
 		}
 	}
 

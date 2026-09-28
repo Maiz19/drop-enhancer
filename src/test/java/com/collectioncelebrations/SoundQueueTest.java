@@ -28,9 +28,9 @@ public class SoundQueueTest
 		audio = mock(AudioPlayer.class);
 		sounds.audioPlayer = audio;
 		sounds.gate = mock(CaseGate.class);
-		sounds.runeliteDirectory = temporary.getRoot();
-		java.nio.file.Path folder = temporary.getRoot().toPath().resolve("collection-celebrations/sounds");
+		java.nio.file.Path folder = temporary.getRoot().toPath().resolve("sounds");
 		Files.createDirectories(folder);
+		sounds.soundDirectory = net.runelite.client.util.Filepath.Unchecked.getRooted(folder);
 		try (InputStream input = getClass().getResourceAsStream("/sounds/custom-sounds-common.wav"))
 		{
 			Files.copy(input, folder.resolve("test.wav"));
@@ -183,7 +183,7 @@ public class SoundQueueTest
 			entered.complete(null);
 			release.get(2, TimeUnit.SECONDS);
 			return call.callRealMethod();
-		}).when(sounds).load(any(java.io.File.class));
+		}).when(sounds).load(any(net.runelite.client.util.Filepath.class));
 		try
 		{
 			sounds.playPreview("test.wav", 80, "test.wav", 60);
@@ -215,7 +215,7 @@ public class SoundQueueTest
 			entered.complete(null);
 			release.get(2, TimeUnit.SECONDS);
 			return call.callRealMethod();
-		}).when(sounds).load(any(java.io.File.class));
+		}).when(sounds).load(any(net.runelite.client.util.Filepath.class));
 		try
 		{
 			sounds.playNow("test.wav", 80);
@@ -238,7 +238,7 @@ public class SoundQueueTest
 				release.get(2, TimeUnit.SECONDS);
 			}
 			return call.callRealMethod();
-		}).when(sounds).load(any(java.io.File.class));
+		}).when(sounds).load(any(net.runelite.client.util.Filepath.class));
 		try
 		{
 			sounds.playNow("test.wav", 80);
@@ -259,7 +259,7 @@ public class SoundQueueTest
 			entered.release();
 			proceed.tryAcquire(2, TimeUnit.SECONDS);
 			return call.callRealMethod();
-		}).when(sounds).load(any(java.io.File.class));
+		}).when(sounds).load(any(net.runelite.client.util.Filepath.class));
 		doReturn(10_000L).when(sounds).monotonicMillis();
 		sounds.playNow("test.wav", 80);
 		sounds.playNow("test.wav", 50);
@@ -284,7 +284,7 @@ public class SoundQueueTest
 			entered.release();
 			release.get(5, TimeUnit.SECONDS);
 			return call.callRealMethod();
-		}).when(sounds).load(any(java.io.File.class));
+		}).when(sounds).load(any(net.runelite.client.util.Filepath.class));
 		try
 		{
 			for (long stall = 1; stall <= 3; stall++)

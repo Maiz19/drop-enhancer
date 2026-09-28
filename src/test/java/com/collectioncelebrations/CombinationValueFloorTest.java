@@ -30,7 +30,7 @@ public class CombinationValueFloorTest
 		target = mock(ItemComposition.class);
 		when(target.isGeTradeable()).thenReturn(true);
 		when(items.getItemComposition(1)).thenReturn(target);
-		when(items.getItemPrice(anyInt())).thenReturn(100_000_000);
+		when(items.getItemPrice(anyInt())).thenReturn(100_000_000L);
 		data = new HashMap<>();
 		for (int id = 1; id <= 100; id++)
 		{
@@ -50,7 +50,7 @@ public class CombinationValueFloorTest
 
 	private RarityTier tier(int price)
 	{
-		when(items.getItemPrice(1)).thenReturn(price);
+		when(items.getItemPrice(1)).thenReturn((long) price);
 		return resolver.resolve(1, "Tormented synapse").getTier();
 	}
 
@@ -88,7 +88,7 @@ public class CombinationValueFloorTest
 	@Test
 	public void wikiCanStillPromoteCheapItems()
 	{
-		when(items.getItemPrice(anyInt())).thenReturn(1000);
+		when(items.getItemPrice(anyInt())).thenReturn(1000L);
 		data.values().forEach(entry -> entry.comp = 100.0);
 		data.get("1").comp = 0.1;
 		resolver.reload(data);

@@ -2,7 +2,6 @@
 package com.collectioncelebrations;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -13,8 +12,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import net.runelite.client.RuneLite;
 import net.runelite.client.audio.AudioPlayer;
+import net.runelite.client.util.Filepath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +67,8 @@ class SoundQueue
 		playingUntil.removeIf(deadline -> now >= deadline);
 		return worker != null && (pendingAudio.get() > 0 || !playingUntil.isEmpty());
 	}
-	File runeliteDirectory = RuneLite.RUNELITE_DIR;
+	/** The plugin directory's sounds folder, where users put their own WAVs; set by the plugin before start. */
+	Filepath soundDirectory;
 	private static final class Request
 	{
 		final String name;
@@ -123,9 +123,9 @@ class SoundQueue
 	{
 		return name != null && name.trim().matches("[A-Za-z0-9_ .()-]+\\.wav") && !name.contains("..");
 	}
-	private File file(String name)
+	private Filepath file(String name)
 	{
-		return new File(new File(runeliteDirectory, "collection-celebrations/sounds"), name.trim());
+		return soundDirectory.joinSegment(name.trim());
 	}
 	void offer(String name, int volume, long delay, boolean reward)
 	{
@@ -213,7 +213,7 @@ class SoundQueue
 		previewGeneration++;
 	}
 
-	WavData load(File file) throws Exception
+	WavData load(Filepath file) throws Exception
 	{
 		return SoundResources.load(file);
 	}

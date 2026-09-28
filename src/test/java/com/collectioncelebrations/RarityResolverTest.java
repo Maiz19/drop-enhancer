@@ -179,7 +179,7 @@ public class RarityResolverTest
 	{
 		when(itemManager.getItemPrice(anyInt())).thenAnswer(invocation -> {
 			int id = invocation.getArgument(0);
-			return (id % 1000) + 1;
+			return (long) (id % 1000) + 1;
 		});
 
 		RarityResult result = resolver.resolve(999_999, "Brand new item");
@@ -190,7 +190,7 @@ public class RarityResolverTest
 	@Test
 	public void unknownItemWithHighPriceIsBucketedByThreshold()
 	{
-		when(itemManager.getItemPrice(999_999)).thenReturn(2_000_000);
+		when(itemManager.getItemPrice(999_999)).thenReturn(2_000_000L);
 
 		RarityResult result = resolver.resolve(999_999, "Brand new expensive item");
 		assertEquals(RarityTier.RARE, result.getTier());
@@ -234,7 +234,7 @@ public class RarityResolverTest
 	@Test
 	public void resultExposesCompPercentAndPriceForDisplay()
 	{
-		when(itemManager.getItemPrice(4508)).thenReturn(509);
+		when(itemManager.getItemPrice(4508)).thenReturn(509L);
 
 		RarityResult result = resolver.resolve(4508, "Not a pet");
 		assertEquals(Double.valueOf(1.3), result.getCompPercent());
@@ -246,7 +246,7 @@ public class RarityResolverTest
 	@Test
 	public void fallsBackToHighAlchValueWhenNoGePrice()
 	{
-		when(itemManager.getItemPrice(4508)).thenReturn(0);
+		when(itemManager.getItemPrice(4508)).thenReturn(0L);
 		ItemComposition composition = mock(ItemComposition.class);
 		when(composition.getHaPrice()).thenReturn(1000);
 		when(itemManager.getItemComposition(4508)).thenReturn(composition);
@@ -259,7 +259,7 @@ public class RarityResolverTest
 	@Test
 	public void doesNotFallBackToHighAlchWhenGePriceIsPositive()
 	{
-		when(itemManager.getItemPrice(4508)).thenReturn(509);
+		when(itemManager.getItemPrice(4508)).thenReturn(509L);
 		ItemComposition composition = mock(ItemComposition.class);
 		when(composition.getHaPrice()).thenReturn(1000);
 		when(itemManager.getItemComposition(4508)).thenReturn(composition);
@@ -289,7 +289,7 @@ public class RarityResolverTest
 	@Test
 	public void negativePriceOnOneDatasetItemDoesNotPoisonEveryoneElsesPercentile()
 	{
-		when(itemManager.getItemPrice(2583)).thenReturn(-2);
+		when(itemManager.getItemPrice(2583)).thenReturn(-2L);
 
 		RarityResult result = resolver.resolve(11849, "Not a pet");
 		assertEquals(RarityTier.COMMON, result.getTier());
@@ -301,7 +301,7 @@ public class RarityResolverTest
 	@Test
 	public void maxIntPriceOnOneDatasetItemDoesNotPoisonEveryoneElsesPercentile()
 	{
-		when(itemManager.getItemPrice(2583)).thenReturn(Integer.MAX_VALUE);
+		when(itemManager.getItemPrice(2583)).thenReturn((long) Integer.MAX_VALUE);
 
 		RarityResult result = resolver.resolve(11849, "Not a pet");
 		assertEquals(RarityTier.COMMON, result.getTier());
@@ -313,7 +313,7 @@ public class RarityResolverTest
 	@Test
 	public void unknownItemStillResolvesSanelyWhenSomeDatasetPriceOverflows()
 	{
-		when(itemManager.getItemPrice(2583)).thenReturn(Integer.MAX_VALUE);
+		when(itemManager.getItemPrice(2583)).thenReturn((long) Integer.MAX_VALUE);
 
 		RarityResult result = resolver.resolve(-1, "Cupric sulfate (Members)");
 		assertEquals(RarityTier.COMMON, result.getTier());
@@ -324,7 +324,7 @@ public class RarityResolverTest
 	private RarityTier tierForPrice(int price)
 	{
 		config.basis = RarityBasis.VALUE;
-		when(itemManager.getItemPrice(4508)).thenReturn(price);
+		when(itemManager.getItemPrice(4508)).thenReturn((long) price);
 		return resolver.resolve(4508, "Not a pet").getTier();
 	}
 
@@ -364,7 +364,7 @@ public class RarityResolverTest
 	public void valueBasisBucketsOnHighAlchWhenNoGePrice()
 	{
 		config.basis = RarityBasis.VALUE;
-		when(itemManager.getItemPrice(4508)).thenReturn(0);
+		when(itemManager.getItemPrice(4508)).thenReturn(0L);
 		ItemComposition composition = mock(ItemComposition.class);
 		when(composition.getHaPrice()).thenReturn(2_000_000);
 		when(itemManager.getItemComposition(4508)).thenReturn(composition);
@@ -378,7 +378,7 @@ public class RarityResolverTest
 	public void petStillWinsAheadOfThresholdsOnValueBasis()
 	{
 		config.basis = RarityBasis.VALUE;
-		when(itemManager.getItemPrice(anyInt())).thenReturn(0);
+		when(itemManager.getItemPrice(anyInt())).thenReturn(0L);
 
 		assertEquals(RarityTier.PET, resolver.resolve(11849, "Baby mole").getTier());
 	}
@@ -415,7 +415,7 @@ public class RarityResolverTest
 	@Test
 	public void raisingThresholdPastPriceLowersCombinationValueScore()
 	{
-		when(itemManager.getItemPrice(4508)).thenReturn(2_000_000);
+		when(itemManager.getItemPrice(4508)).thenReturn(2_000_000L);
 
 		double before = resolver.resolve(4508, "Not a pet").getValueScore();
 		config.rare = 50_000_000;
@@ -431,7 +431,7 @@ public class RarityResolverTest
 	@Test
 	public void combinationAgreesWithValueForPricedItemWithNoCompPercent()
 	{
-		when(itemManager.getItemPrice(999_999)).thenReturn(2_000_000);
+		when(itemManager.getItemPrice(999_999)).thenReturn(2_000_000L);
 
 		config.basis = RarityBasis.COMBINATION;
 		RarityTier combination = resolver.resolve(999_999, "Brand new item").getTier();
@@ -447,7 +447,7 @@ public class RarityResolverTest
 	public void rarityBasisIsUnaffectedByThresholds()
 	{
 		config.basis = RarityBasis.RARITY;
-		when(itemManager.getItemPrice(4508)).thenReturn(50_000_000);
+		when(itemManager.getItemPrice(4508)).thenReturn(50_000_000L);
 
 		RarityTier expensive = resolver.resolve(4508, "Not a pet").getTier();
 		config.uncommon = 1;

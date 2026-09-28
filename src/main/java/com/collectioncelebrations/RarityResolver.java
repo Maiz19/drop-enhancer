@@ -238,10 +238,11 @@ public class RarityResolver
 		{
 			return 0;
 		}
-		int gePrice = itemManager.getItemPrice(itemId);
+		// Prices are longs since RuneLite 1.13 (Jagex raised the cash stack limit).
+		long gePrice = itemManager.getItemPrice(itemId);
 		if (gePrice > 0)
 		{
-			return gePrice;
+			return (int) Math.min(Integer.MAX_VALUE, gePrice);
 		}
 		return itemManager.getItemComposition(itemId).getHaPrice();
 	}

@@ -109,7 +109,8 @@ public class SoundResourcesTest
 
 	private AudioInputStream decode(File file) throws Exception
 	{
-		WavData wav = SoundResources.load(file);
+		WavData wav = SoundResources.load(net.runelite.client.util.Filepath.Unchecked.getRooted(file.getParentFile().toPath())
+			.joinSegment(file.getName()));
 		assertTrue(wav.durationMillis > 0);
 		return AudioSystem.getAudioInputStream(new ByteArrayInputStream(wav.bytes));
 	}

@@ -1,12 +1,11 @@
 /* Copyright (c) 2026 maiz. BSD-2-Clause; see LICENSE. */
 package com.collectioncelebrations;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-import java.nio.file.Files;
+import net.runelite.client.util.Filepath;
 
 /** Local overrides take precedence; defaults are read directly from the plugin JAR. */
 final class SoundResources
@@ -25,16 +24,16 @@ final class SoundResources
 	{
 	}
 
-	static WavData load(File local) throws IOException
+	static WavData load(Filepath local) throws IOException
 	{
 		if (local.exists())
 		{
-			try (InputStream input = Files.newInputStream(local.toPath()))
+			try (InputStream input = local.openInputStream())
 			{
 				return WavData.read(input);
 			}
 		}
-		String name = LEGACY_DEFAULTS.getOrDefault(local.getName(), local.getName());
+		String name = LEGACY_DEFAULTS.getOrDefault(local.getFileName(), local.getFileName());
 		InputStream resource = SoundQueue.validName(name) ? SoundResources.class.getResourceAsStream("/sounds/" + name) : null;
 		if (resource == null)
 		{

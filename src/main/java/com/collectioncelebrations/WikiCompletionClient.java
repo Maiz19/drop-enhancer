@@ -115,7 +115,7 @@ final class WikiCompletionClient
 
 	private JsonElement get(HttpUrl url) throws IOException
 	{
-		if (cancelled || Thread.currentThread().isInterrupted())
+		if (cancelled)
 		{
 			throw new IOException("Refresh cancelled");
 		}
@@ -127,7 +127,7 @@ final class WikiCompletionClient
 		Call call = client().newCall(request);
 		synchronized (this)
 		{
-			if (cancelled || Thread.currentThread().isInterrupted())
+			if (cancelled)
 			{
 				throw new IOException("Refresh cancelled");
 			}

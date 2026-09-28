@@ -52,7 +52,7 @@ public class UntradeableRarityTest
 			when(config.rarityBasis()).thenReturn(basis);
 			for (int price : new int[] {0, 100, 100000000})
 			{
-				when(items.getItemPrice(20)).thenReturn(price);
+				when(items.getItemPrice(20)).thenReturn((long) price);
 				when(target.getHaPrice()).thenReturn(price);
 				RarityResult result = resolver.resolve(20, "Item 20");
 				assertEquals(RarityTier.VERY_RARE, result.getTier());
@@ -68,7 +68,7 @@ public class UntradeableRarityTest
 		when(target.isGeTradeable()).thenReturn(true);
 		when(config.rarityBasis()).thenReturn(RarityBasis.VALUE);
 		assertEquals(RarityTier.COMMON, resolver.resolve(20, "Item 20").getTier());
-		when(items.getItemPrice(20)).thenReturn(100000000);
+		when(items.getItemPrice(20)).thenReturn(100000000L);
 		assertEquals(RarityTier.VERY_RARE, resolver.resolve(20, "Item 20").getTier());
 	}
 

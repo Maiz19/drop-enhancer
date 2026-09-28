@@ -14,8 +14,13 @@ dependencies {
     testImplementation "net.runelite:jshell:${runeLiteVersion}"
 }
 group = 'com.collectioncelebrations'
-version = '1.2'
+version = '1.2.1'
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release.set(11) }
+// RuneLite.RUNELITE_DIR follows user.home: tests that start the plugin (getPluginDirectory, which also moves the old
+// collection-celebrations folder) must never touch the real ~/.runelite.
+test {
+    systemProperty 'user.home', layout.buildDirectory.dir('test-home').get().asFile.path
+}
 tasks.register('run', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.collectioncelebrations.CelebrationPluginTest'

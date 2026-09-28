@@ -23,7 +23,7 @@ Open pages of your collection log so the plugin can read your item quantities. T
 
 **Sharp in stretched mode** — the popup is drawn on whole pixels in the RuneScape font, without anti-aliasing, so stretched mode enlarges it as hard pixels like the game's own interface. **Text outline** adds RuneLite's shadow or outline behind the text.
 
-**Custom sounds** — put an uncompressed PCM `.wav` (up to 32 MB) in `.runelite/collection-celebrations/sounds/` and enter its filename in the tier's WAV setting. Keep the default filename for the bundled sound, or leave it blank to mute the tier.
+**Custom sounds** — put an uncompressed PCM `.wav` (up to 32 MB) in `.runelite/plugin-data/drop-enhancer/sounds/` (moved there from `.runelite/collection-celebrations/sounds/` on the first start of 1.2.1) and enter its filename in the tier's WAV setting. Keep the default filename for the bundled sound, or leave it blank to mute the tier.
 
 **Refresh wiki data** — **on by default.** The plugin downloads public item lists, completion percentages and drop rates from `oldschool.runescape.wiki`, refreshed weekly on the Thursday after the Wednesday game update. This contacts a third-party server that is not controlled or verified by the RuneLite developers, so the wiki receives your IP address as it would for any web request. No player name, collection contents or other personal data is ever sent. Turn the setting off to stop all wiki requests; data that was already downloaded stays in use, and is also kept if a refresh fails. Wiki data is CC BY-NC-SA 3.0 by OSRS Wiki contributors and is not bundled with the plugin.
 

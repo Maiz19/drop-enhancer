@@ -278,14 +278,14 @@ class CelebrationOverlay extends Overlay
 				l.center(g, label, cx, baseline, 12, config.colourStatLabel(), 156);
 				l.center(g, value, cx, baseline + 18, 18, config.colourStatValue(), 156);
 			}
-			if (config.tierEffects() && elapsed >= SLIDE_MS)
+			double pop = iconPop(elapsed);
+			if (config.tierEffects())
 			{
-				drawTierEffect(g, l, c.tier, accent, elapsed, config.showItemIcon());
+				// From the start, as the unlock effect: the twinkles slide in with the panel, the ring grows with the medallion.
+				drawTierEffect(g, l, c.tier, accent, elapsed, config.showItemIcon() ? pop : 0);
 			}
-			if (config.showItemIcon() && elapsed >= SLIDE_MS)
+			if (config.showItemIcon() && pop > 0)
 			{
-				double raw = Math.max(0, Math.min(1, (elapsed - SLIDE_MS) / (double)ICON_MS));
-				double t = raw - 1, pop = .4 + .6 * (1 + 2.9 * t * t * t + 1.9 * t * t);
 				int radius = l.p(39 * pop), cx = l.p(240), cy = l.p(171);
 				g.setColor(new Color(16, 20, 28));
 				g.fillOval(cx - radius, cy - radius, radius * 2, radius * 2);
@@ -402,7 +402,18 @@ class CelebrationOverlay extends Overlay
 		star(g, l, 56, 26, 6 + 2 * pulse, new Color(255, 223, 128));
 		star(g, l, 424, 26, 6 + 2 * pulse, new Color(255, 223, 128));
 	}
-	private static void drawTierEffect(Graphics2D g, Layout l, PreviewTier tier, Color colour, long elapsed, boolean iconVisible)
+	/** The medallion's size, popping in after the slide: 0 before it shows, 1 once settled. */
+	static double iconPop(long elapsed)
+	{
+		if (elapsed < SLIDE_MS)
+		{
+			return 0;
+		}
+		double t = Math.max(0, Math.min(1, (elapsed - SLIDE_MS) / (double)ICON_MS)) - 1;
+		return .4 + .6 * (1 + 2.9 * t * t * t + 1.9 * t * t);
+	}
+	/** {@code ring}: the medallion's size, or 0 while it does not show (then the ring around it does not either). */
+	private static void drawTierEffect(Graphics2D g, Layout l, PreviewTier tier, Color colour, long elapsed, double ring)
 	{
 		int strength = tier == PreviewTier.PET ? 3 : tier == PreviewTier.VERY_RARE ? 2 : tier == PreviewTier.RARE ? 1 : 0;
 		if (strength == 0)
@@ -410,27 +421,27 @@ class CelebrationOverlay extends Overlay
 			return;
 		}
 		// This effect belongs to the rarity, so it also appears on repeats.
-		if (iconVisible)
+		if (ring > 0)
 		{
 			double rotation = elapsed / 850.0;
-			int cx = l.p(240), cy = l.p(171), r = l.p(46);
+			int cx = l.p(240), cy = l.p(171), r = l.p(46 * ring);
 			g.setColor(new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), 155));
 			g.setStroke(new BasicStroke(l.f(1.5)));
 			for (int i = 0; i < strength + 1; i++)
 			{
 				double angle = rotation + i * Math.PI * 2 / (strength + 1);
 				g.drawArc(cx - r, cy - r, r * 2, r * 2, (int)Math.toDegrees(-angle), 38);
-				star(g, l, 240 + Math.cos(angle) * 46, 171 + Math.sin(angle) * 46, 3, colour);
+				star(g, l, 240 + Math.cos(angle) * 46 * ring, 171 + Math.sin(angle) * 46 * ring, 3, colour);
 			}
 			if (strength > 1)
 			{
 				for (int i = 0; i < 12; i++)
 				{
 					double angle = i * Math.PI * 2 / 12 + rotation / 4;
-					double ray = 49 + (strength == 3 ? 8 : 4) * (.5 + .5 * Math.sin(rotation * 2 + i));
+					double ray = (49 + (strength == 3 ? 8 : 4) * (.5 + .5 * Math.sin(rotation * 2 + i))) * ring;
 					g.setColor(new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), 100));
-					g.drawLine(l.p(240 + Math.cos(angle) * 43), l.p(171 + Math.sin(angle) * 43), l.p(240 + Math.cos(angle) * ray),
-							   l.p(171 + Math.sin(angle) * ray));
+					g.drawLine(l.p(240 + Math.cos(angle) * 43 * ring), l.p(171 + Math.sin(angle) * 43 * ring),
+							   l.p(240 + Math.cos(angle) * ray), l.p(171 + Math.sin(angle) * ray));
 				}
 			}
 		}
@@ -445,17 +456,41 @@ class CelebrationOverlay extends Overlay
 			}
 		}
 	}
+	/**
+	 * A four-pointed star, pixel for pixel and the same on every side around its centre pixel, with a one-pixel glow
+	 * along its edge. Filled polygons are not used: without anti-aliasing they drop their right and bottom edge
+	 * pixels, which cut the star's right and bottom points short.
+	 */
 	private static void star(Graphics2D g, Layout l, double x, double y, double radius, Color colour)
 	{
-		int cx = l.p(x), cy = l.p(y), r = Math.max(1, l.p(radius));
-		g.setColor(new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), colour.getAlpha() / 5));
-		g.fillOval(cx - r * 2, cy - r * 2, r * 4, r * 4);
-		g.setColor(colour);
-		g.fillPolygon(new int[] {cx, cx + Math.max(1, r / 3), cx + r, cx + Math.max(1, r / 3), cx, cx - Math.max(1, r / 3), cx - r,
-								 cx - Math.max(1, r / 3)},
-					  new int[] {cy - r, cy - Math.max(1, r / 3), cy, cy + Math.max(1, r / 3), cy + r, cy + Math.max(1, r / 3), cy,
-								 cy - Math.max(1, r / 3)},
-					  8);
+		// Rounded, so a pulsing star keeps its shape from one size to the next.
+		int cx = l.p(x), cy = l.p(y), r = Math.max(1, l.p(radius)), w = Math.max(1, (int)Math.round(r / 3.0));
+		Color glow = new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), colour.getAlpha() / 3);
+		for (int dy = -r - 1; dy <= r + 1; dy++)
+		{
+			for (int dx = -r - 1; dx <= r + 1; dx++)
+			{
+				if (inStar(dx, dy, r, w))
+				{
+					g.setColor(colour);
+				}
+				else if (inStar(dx - 1, dy, r, w) || inStar(dx + 1, dy, r, w) || inStar(dx, dy - 1, r, w) || inStar(dx, dy + 1, r, w))
+				{
+					g.setColor(glow);
+				}
+				else
+				{
+					continue;
+				}
+				g.fillRect(cx + dx, cy + dy, 1, 1);
+			}
+		}
+	}
+	/** Tips at distance r on the axes, waist corners at (±w, ±w); the pixel at offset (dx, dy) from the centre pixel. */
+	static boolean inStar(int dx, int dy, int r, int w)
+	{
+		int big = Math.max(Math.abs(dx), Math.abs(dy)), small = Math.min(Math.abs(dx), Math.abs(dy));
+		return big <= r && small <= (r > w ? w * (r - big) / (double)(r - w) : 0);
 	}
 	/**
 	 * The RuneScape fonts draw pixel for pixel at 16px and at whole multiples of it, so popup text

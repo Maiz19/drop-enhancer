@@ -4,6 +4,7 @@
 package com.collectioncelebrations;
 
 import com.google.inject.Provides;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -43,19 +44,18 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
-import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.plugins.grounditems.GroundItemsPlugin;
-import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
+import net.runelite.client.plugins.grounditems.GroundItemsConfig;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.Filepath;
 import net.runelite.client.util.Text;
 import net.runelite.api.widgets.Widget;
 
 @PluginDescriptor(name = "Drop Enhancer", description = "Collection log, repeat drop popups and custom sounds",
-				  conflicts = {"Collection Log Popup Enhanced", "Custom Sounds"})
-@PluginDependency(GroundItemsPlugin.class)
-@PluginDependency(LootTrackerPlugin.class)
+				  conflicts = {"Collection Log Popup Enhanced", "Custom Sounds"}, internalName = "drop-enhancer",
+				  // Users' own sounds and the wiki caches, moved into the plugin directory once.
+				  legacyDataDirectory = "collection-celebrations")
 public class CelebrationPlugin extends Plugin
 {
 	// collection_delayed_transmit; no named constant is exposed by RuneLite ScriptID.
@@ -126,10 +126,23 @@ public class CelebrationPlugin extends Plugin
 	{
 		return manager.getConfig(CelebrationConfig.class);
 	}
+
+	/**
+	 * Ground Items' settings (hidden items, value tiers and colours), read as they are saved. Since RuneLite 1.13 a
+	 * {@code @PluginDependency} must expose services, which Ground Items does not.
+	 */
+	@Provides
+	GroundItemsConfig provideGroundItemsConfig(ConfigManager manager)
+	{
+		return manager.getConfig(GroundItemsConfig.class);
+	}
 	@Override
-	protected void startUp()
+	protected void startUp() throws IOException
 	{
 		migrateTextOutline(configManager);
+		Filepath folder = getPluginDirectory();
+		wiki.dataDirectory = folder.joinSegment("data");
+		sounds.soundDirectory = folder.joinSegment("sounds");
 		reset();
 		wiki.start();
 		sounds.start();

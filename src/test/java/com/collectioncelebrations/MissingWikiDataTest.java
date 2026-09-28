@@ -15,7 +15,7 @@ public class MissingWikiDataTest
 		ItemManager items = mock(ItemManager.class);
 		when(items.getItemComposition(11832)).thenReturn(mock(ItemComposition.class));
 		when(items.getItemComposition(11832).isGeTradeable()).thenReturn(true);
-		when(items.getItemPrice(11832)).thenReturn(20000000);
+		when(items.getItemPrice(11832)).thenReturn(20000000L);
 		for (RarityBasis basis : RarityBasis.values())
 		{
 			CelebrationConfig config = new CelebrationConfig() {
@@ -36,7 +36,7 @@ public class MissingWikiDataTest
 	public void linkedGroundItemThresholdsUpdateWithoutCopyingSettings()
 	{
 		ItemManager items = mock(ItemManager.class);
-		when(items.getItemPrice(1)).thenReturn(500000);
+		when(items.getItemPrice(1)).thenReturn(500000L);
 		when(items.getItemComposition(1)).thenReturn(mock(ItemComposition.class));
 		when(items.getItemComposition(1).isGeTradeable()).thenReturn(true);
 		CelebrationConfig config = new CelebrationConfig() {
