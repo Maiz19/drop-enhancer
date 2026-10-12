@@ -11,8 +11,13 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
+import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Arc2D;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import javax.inject.Inject;
@@ -27,7 +32,15 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 @Singleton
 class CelebrationOverlay extends Overlay
 {
-	static final int WIDTH = 480, HEIGHT = 234;
+	static final int WIDTH = 480, HEIGHT = 266;
+	/** At 100% the popup is drawn at this share of its design size: small, with the item sprite pixel for pixel. */
+	static final double BASE_SCALE = .6375;
+	/** The item medallion's radius in design units: at 100% a full 36x32 sprite fits inside its inner ring. */
+	static final int MEDALLION = 49;
+	/** The medallion's centre: low enough to leave room between it and the extra drop rate above it. */
+	static final int MEDALLION_Y = 186;
+	/** The frame's bottom edge in design units, a little below the medallion's centre. */
+	static final int FRAME_BOTTOM = MEDALLION_Y + 11;
 	static final long SLIDE_MS = 550, ICON_MS = 400, FADE_MS = 400;
 	@Inject
 	Client client;
@@ -105,7 +118,7 @@ class CelebrationOverlay extends Overlay
 		Graphics2D g = (Graphics2D)original.create();
 		try
 		{
-			double scale = Math.max(.6, Math.min(2, config.popupScale() / 100.0));
+			double scale = Math.max(90, Math.min(250, config.popupSize())) / 100.0 * BASE_SCALE;
 			scale = Math.min(
 				scale, Math.min((client.getViewportWidth() - 24) / (double)WIDTH, (client.getViewportHeight() - 24) / (double)HEIGHT));
 			if (scale <= 0)
@@ -150,11 +163,22 @@ class CelebrationOverlay extends Overlay
 		{
 			g.translate(x, y);
 			Layout l = new Layout(width / (double)WIDTH, config);
-			// Every edge lands on whole pixels, so stretched mode scales the popup up as hard pixels.
-			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+			if (l.soft)
+			{
+				// Smooth shapes, but on the pixel grid where they can be: whole-pixel strokes on pixel edges, so
+				// stretched mode enlarges far fewer half-covered pixels than plain smoothing.
+				g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+				g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+			}
+			else
+			{
+				// Every edge lands on whole pixels, so stretched mode scales the popup up as hard pixels.
+				g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+				g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_DEFAULT);
+			}
+			// Text is the same in both: smoothed, the RuneScape fonts blur and lose their shapes in stretched mode.
 			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
 			g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
-			g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_DEFAULT);
 			if (accent == null)
 			{
 				accent = new Color(221, 190, 125);
@@ -168,19 +192,16 @@ class CelebrationOverlay extends Overlay
 				// Gold is a separate halo OUTSIDE the unmodified rarity frame.
 				for (int i = 18; i >= 2; i -= 2)
 				{
-					g.setStroke(new BasicStroke(l.f(i)));
 					g.setColor(new Color(255, 204, 92, 24));
-					g.draw(frame);
+					l.outline(g, frame, i);
 				}
 			}
-			g.setPaint(new GradientPaint(0, 0, tint, 0, l.p(176), new Color(14, 17, 23)));
+			g.setPaint(new GradientPaint(0, 0, tint, 0, l.p(FRAME_BOTTOM), new Color(14, 17, 23)));
 			g.fill(frame);
 			g.setColor(accent);
-			g.setStroke(new BasicStroke(l.f(2)));
-			g.draw(frame);
+			l.outline(g, frame, 2);
 			g.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 85));
-			g.setStroke(new BasicStroke(l.f(1)));
-			g.draw(frame(l, 5));
+			l.outline(g, frame(l, 5), 1);
 			// Decorative top diamond and tier label belong to the rarity, not the unlock effect.
 			g.setColor(accent);
 			g.fillPolygon(new int[] {l.p(240), l.p(244), l.p(240), l.p(236)}, new int[] {l.p(3), l.p(7), l.p(11), l.p(7)}, 4);
@@ -200,8 +221,8 @@ class CelebrationOverlay extends Overlay
 									&& java.util.Arrays.stream(choices).noneMatch(s -> s == PopupStat.DROP_RATE);
 			if (extraDropRate)
 			{
-				l.center(g, "DROP RATE", 240, 98, 12, config.colourStatLabel(), 104);
-				l.center(g, c.dropRateText, 240, 116, 16, config.colourStatValue(), 104);
+				l.center(g, "DROP RATE", 240, 101, 12, config.colourStatLabel(), 104);
+				l.center(g, c.dropRateText, 240, 120, 16, config.colourStatValue(), 104);
 			}
 			for (int i = 0; i < choices.length; i++)
 			{
@@ -228,10 +249,13 @@ class CelebrationOverlay extends Overlay
 					{
 						continue;
 					}
-					label = c.confirmedTotal != null ? "COLLECTED" : c.lastSyncedTotal != null ? "LAST SYNCED" : "TEMPORARY";
-					value = String.valueOf(c.confirmedTotal != null	   ? c.confirmedTotal
-										   : c.lastSyncedTotal != null ? c.lastSyncedTotal
-																	   : c.provisionalTotal);
+					label = "COLLECTED";
+					// A dash until the collection log has been read once for this item.
+					Integer total = c.confirmedTotal != null ? c.confirmedTotal : c.countedTotal;
+					if (total != null)
+					{
+						value = String.valueOf(total);
+					}
 					break;
 				case KILL_COUNT:
 					if (!kcVisible)
@@ -274,9 +298,10 @@ class CelebrationOverlay extends Overlay
 					break;
 				}
 				// Two stacked stats on each side leave the central item medallion clear.
-				int cx = i % 2 == 0 ? 105 : 375, baseline = i < 2 ? 113 : 150;
+				// Spaced for the fonts' own 16px at 100%, where they are larger than the design's sizes.
+				int cx = i % 2 == 0 ? 105 : 375, baseline = i < 2 ? 108 : 156;
 				l.center(g, label, cx, baseline, 12, config.colourStatLabel(), 156);
-				l.center(g, value, cx, baseline + 18, 18, config.colourStatValue(), 156);
+				l.center(g, value, cx, baseline + 23, 18, config.colourStatValue(), 156);
 			}
 			double pop = iconPop(elapsed);
 			if (config.tierEffects())
@@ -286,17 +311,28 @@ class CelebrationOverlay extends Overlay
 			}
 			if (config.showItemIcon() && pop > 0)
 			{
-				int radius = l.p(39 * pop), cx = l.p(240), cy = l.p(171);
+				int radius = l.p(MEDALLION * pop), cx = l.p(240), cy = l.p(MEDALLION_Y);
+				if (l.soft)
+				{
+					// A halo in the rarity colour that fades out around the disc, like the stars' glow.
+					float halo = radius * 1.35f;
+					g.setPaint(new RadialGradientPaint(cx, cy, halo, new float[] {0, radius / halo, 1},
+						new Color[] {alpha(accent, 70), alpha(accent, 70), alpha(accent, 0)}));
+					g.fill(new Ellipse2D.Double(cx - halo, cy - halo, halo * 2, halo * 2));
+				}
 				g.setColor(new Color(16, 20, 28));
 				g.fillOval(cx - radius, cy - radius, radius * 2, radius * 2);
-				g.setStroke(new BasicStroke(l.f(2)));
+				// A soft light in the rarity colour behind the item, so dark sprites stand out from the disc.
+				g.setPaint(new RadialGradientPaint(cx, cy, Math.max(1, radius), new float[] {0, 1},
+					new Color[] {alpha(accent, 115), alpha(accent, 0)}));
+				g.fillOval(cx - radius, cy - radius, radius * 2, radius * 2);
 				g.setColor(accent);
-				g.drawOval(cx - radius, cy - radius, radius * 2, radius * 2);
-				g.setStroke(new BasicStroke(l.f(1)));
-				g.drawOval(cx - radius + l.p(5), cy - radius + l.p(5), radius * 2 - l.p(10), radius * 2 - l.p(10));
+				l.outline(g, new Ellipse2D.Double(cx - radius, cy - radius, radius * 2, radius * 2), 2);
+				l.outline(g, new Ellipse2D.Double(cx - radius + l.p(5), cy - radius + l.p(5), radius * 2 - l.p(10), radius * 2 - l.p(10)), 1);
 				if (icon != null)
 				{
-					drawItemIcon(g, icon, cx, cy, l.scale * 64 * pop, Math.max(1, radius - l.p(7) - 1));
+					// Always at its settled size: the growing disc reveals it rather than scaling its pixels.
+					drawItemIcon(g, icon, cx, cy, l.scale * 64, Math.max(1, l.p(MEDALLION) - l.p(7) - 1), Math.max(1, radius - l.p(7) - 1));
 				}
 				else
 				{
@@ -306,7 +342,7 @@ class CelebrationOverlay extends Overlay
 			// With the extra statistic the tier name sits under the medallion, outside the frame and
 			// over bare scenery, so it keeps at least a shadow there whatever the outline setting.
 			TextOutline outline = config.textOutline();
-			l.center(g, c.tier == null ? "" : c.tier.toString(), 240, extraDropRate ? 229 : 117, 14, accent, 100,
+			l.center(g, c.tier == null ? "" : c.tier.toString(), 240, extraDropRate ? MEDALLION_Y + 70 : 112, 14, accent, 100,
 					 extraDropRate && outline == TextOutline.NONE ? TextOutline.SHADOW : outline);
 		}
 		finally
@@ -315,6 +351,14 @@ class CelebrationOverlay extends Overlay
 		}
 	}
 	static void drawItemIcon(Graphics2D g, BufferedImage icon, int cx, int cy, double maxSize, double safeRadius)
+	{
+		drawItemIcon(g, icon, cx, cy, maxSize, safeRadius, safeRadius);
+	}
+	/**
+	 * The sprite in whole-pixel blocks, never shrunk: a shrunk sprite loses rows and columns of pixels. What does not
+	 * fit inside {@code clipRadius} is cut off instead.
+	 */
+	static void drawItemIcon(Graphics2D g, BufferedImage icon, int cx, int cy, double maxSize, double safeRadius, double clipRadius)
 	{
 		int left = icon.getWidth(), top = icon.getHeight(), right = -1, bottom = -1;
 		for (int y = 0; y < icon.getHeight(); y++)
@@ -349,17 +393,22 @@ class CelebrationOverlay extends Overlay
 			}
 		}
 		double scale = Math.min(maxSize / Math.max(width, height), Math.max(0, safeRadius - 1) / extent);
-		if (scale >= 1)
-		{
-			// Every sprite pixel becomes the same square block, like the game's own icons.
-			scale = Math.floor(scale);
-		}
+		// Every sprite pixel becomes the same square block, like the game's own icons.
+		scale = Math.max(1, Math.floor(scale));
 		int drawWidth = Math.max(1, (int)Math.floor(width * scale));
 		int drawHeight = Math.max(1, (int)Math.floor(height * scale));
 		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+		Shape clip = g.getClip();
+		double r = Math.max(0, clipRadius - 1);
+		g.clip(new Ellipse2D.Double(cx - r, cy - r, r * 2, r * 2));
 		g.drawImage(icon, cx - drawWidth / 2, cy - drawHeight / 2,
 			cx - drawWidth / 2 + drawWidth, cy - drawHeight / 2 + drawHeight,
 			left, top, right + 1, bottom + 1, null);
+		g.setClip(clip);
+	}
+	private static Color alpha(Color colour, int alpha)
+	{
+		return new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), alpha);
 	}
 
 	private static Shape frame(Layout l, int inset)
@@ -368,10 +417,10 @@ class CelebrationOverlay extends Overlay
 		p.moveTo(l.p(14 + inset), l.p(inset));
 		p.lineTo(l.p(466 - inset), l.p(inset));
 		p.lineTo(l.p(480 - inset), l.p(14 + inset));
-		p.lineTo(l.p(480 - inset), l.p(162 - inset));
-		p.lineTo(l.p(466 - inset), l.p(176 - inset));
-		p.lineTo(l.p(14 + inset), l.p(176 - inset));
-		p.lineTo(l.p(inset), l.p(162 - inset));
+		p.lineTo(l.p(480 - inset), l.p(FRAME_BOTTOM - 14 - inset));
+		p.lineTo(l.p(466 - inset), l.p(FRAME_BOTTOM - inset));
+		p.lineTo(l.p(14 + inset), l.p(FRAME_BOTTOM - inset));
+		p.lineTo(l.p(inset), l.p(FRAME_BOTTOM - 14 - inset));
 		p.lineTo(l.p(inset), l.p(14 + inset));
 		p.closePath();
 		return p;
@@ -424,36 +473,47 @@ class CelebrationOverlay extends Overlay
 		if (ring > 0)
 		{
 			double rotation = elapsed / 850.0;
-			int cx = l.p(240), cy = l.p(171), r = l.p(46 * ring);
+			int cx = l.p(240), cy = l.p(MEDALLION_Y), r = l.p((MEDALLION + 7) * ring);
 			g.setColor(new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), 155));
-			g.setStroke(new BasicStroke(l.f(1.5)));
 			for (int i = 0; i < strength + 1; i++)
 			{
 				double angle = rotation + i * Math.PI * 2 / (strength + 1);
-				g.drawArc(cx - r, cy - r, r * 2, r * 2, (int)Math.toDegrees(-angle), 38);
-				star(g, l, 240 + Math.cos(angle) * 46 * ring, 171 + Math.sin(angle) * 46 * ring, 3, colour);
+				// Soft arcs turn smoothly; hard ones in whole degrees.
+				double start = l.soft ? Math.toDegrees(-angle) : (int)Math.toDegrees(-angle);
+				l.outline(g, new Arc2D.Double(cx - r, cy - r, r * 2, r * 2, start, 38, Arc2D.OPEN), 1.5);
+				star(g, l, 240 + Math.cos(angle) * (MEDALLION + 7) * ring, MEDALLION_Y + Math.sin(angle) * (MEDALLION + 7) * ring, 3, colour);
 			}
 			if (strength > 1)
 			{
 				for (int i = 0; i < 12; i++)
 				{
 					double angle = i * Math.PI * 2 / 12 + rotation / 4;
-					double ray = (49 + (strength == 3 ? 8 : 4) * (.5 + .5 * Math.sin(rotation * 2 + i))) * ring;
+					double ray = (MEDALLION + 10 + (strength == 3 ? 8 : 4) * (.5 + .5 * Math.sin(rotation * 2 + i))) * ring;
 					g.setColor(new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), 100));
-					g.drawLine(l.p(240 + Math.cos(angle) * 43 * ring), l.p(171 + Math.sin(angle) * 43 * ring),
-							   l.p(240 + Math.cos(angle) * ray), l.p(171 + Math.sin(angle) * ray));
+					if (l.soft)
+					{
+						double s = l.scale;
+						g.draw(new Line2D.Double(s * (240 + Math.cos(angle) * (MEDALLION + 4) * ring), s * (MEDALLION_Y + Math.sin(angle) * (MEDALLION + 4) * ring),
+							s * (240 + Math.cos(angle) * ray), s * (MEDALLION_Y + Math.sin(angle) * ray)));
+					}
+					else
+					{
+						g.drawLine(l.p(240 + Math.cos(angle) * (MEDALLION + 4) * ring), l.p(MEDALLION_Y + Math.sin(angle) * (MEDALLION + 4) * ring),
+								   l.p(240 + Math.cos(angle) * ray), l.p(MEDALLION_Y + Math.sin(angle) * ray));
+					}
 				}
 			}
 		}
-		if (strength >= 1)
+		// Twinkles rise along both sides, more of them the rarer the drop. Each side's are spread evenly in height,
+		// the two sides in between each other, in lanes clear of the statistics.
+		int perSide = strength * 4;
+		for (int i = 0; i < perSide * 2; i++)
 		{
-			for (int i = 0; i < strength * 4; i++)
-			{
-				double phase = ((elapsed + i * 271L) % 2400) / 2400.0;
-				double x = i % 2 == 0 ? 30 + (i % 3) * 9 : 450 - (i % 3) * 9;
-				star(g, l, x, 176 - phase * 150, 1.5 + 1.5 * Math.sin(phase * Math.PI),
-					 new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), (int)(170 * Math.sin(phase * Math.PI))));
-			}
+			int side = i % 2, k = i / 2;
+			double phase = (elapsed / 2400.0 + (k + side * .5) / perSide) % 1, fade = Math.sin(phase * Math.PI);
+			double inset = 12 + (k * .618034 % 1) * 22 + Math.sin(phase * Math.PI * 2 + k) * 2;
+			star(g, l, side == 0 ? inset : 480 - inset, FRAME_BOTTOM - phase * (FRAME_BOTTOM - 26), (2.8 + k % 3 * .8) * (.5 + .5 * fade),
+				 new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), (int)(170 * fade)));
 		}
 	}
 	/**
@@ -463,6 +523,12 @@ class CelebrationOverlay extends Overlay
 	 */
 	private static void star(Graphics2D g, Layout l, double x, double y, double radius, Color colour)
 	{
+		if (l.soft)
+		{
+			// Around the same pixel's centre as the hard star.
+			softStar(g, l.scale * x + .5, l.scale * y + .5, Math.max(1, l.scale * radius), colour);
+			return;
+		}
 		// Rounded, so a pulsing star keeps its shape from one size to the next.
 		int cx = l.p(x), cy = l.p(y), r = Math.max(1, l.p(radius)), w = Math.max(1, (int)Math.round(r / 3.0));
 		Color glow = new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), colour.getAlpha() / 3);
@@ -493,12 +559,39 @@ class CelebrationOverlay extends Overlay
 		return big <= r && small <= (r > w ? w * (r - big) / (double)(r - w) : 0);
 	}
 	/**
+	 * A smooth star on a glow that fades out, rather than a flat disc that enlarges into a blob. It may sit between
+	 * pixels, so twinkles glide instead of stepping. Leaves the paint as it was.
+	 */
+	private static void softStar(Graphics2D g, double x, double y, double r, Color colour)
+	{
+		java.awt.Paint paint = g.getPaint();
+		float glow = (float)(r * 2.2);
+		g.setPaint(new RadialGradientPaint((float)x, (float)y, glow, new float[] {0, 1},
+			new Color[] {new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), colour.getAlpha() * 2 / 5),
+				new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), 0)}));
+		g.fill(new Ellipse2D.Double(x - glow, y - glow, glow * 2, glow * 2));
+		double w = r / 3;
+		Path2D p = new Path2D.Double();
+		p.moveTo(x, y - r);
+		p.lineTo(x + w, y - w);
+		p.lineTo(x + r, y);
+		p.lineTo(x + w, y + w);
+		p.lineTo(x, y + r);
+		p.lineTo(x - w, y + w);
+		p.lineTo(x - r, y);
+		p.lineTo(x - w, y - w);
+		p.closePath();
+		g.setColor(colour);
+		g.fill(p);
+		g.setPaint(paint);
+	}
+	/**
 	 * The RuneScape fonts draw pixel for pixel at 16px and at whole multiples of it, so popup text
-	 * uses only those sizes: bold for the name, headings and values, small for the rest.
+	 * uses only those sizes: bold for the item name, the smaller font for everything else.
 	 */
 	static Font pixelFont(int size)
 	{
-		return size >= 14 ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont();
+		return size >= 20 ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont();
 	}
 	static int pixelMultiple(int size, double scale)
 	{
@@ -509,10 +602,12 @@ class CelebrationOverlay extends Overlay
 	{
 		final double scale;
 		final CelebrationConfig config;
+		final boolean soft;
 		Layout(double scale, CelebrationConfig config)
 		{
 			this.scale = scale;
 			this.config = config;
+			soft = config.popupRendering() == PopupRendering.SOFT;
 		}
 		int p(double value)
 		{
@@ -522,6 +617,16 @@ class CelebrationOverlay extends Overlay
 		{
 			// Strokes stay whole pixels wide.
 			return Math.max(1, Math.round(value * scale));
+		}
+		/**
+		 * A whole-pixel-wide outline. A smooth one of odd width moves half a pixel, so its straight edges cover whole
+		 * pixels instead of two half ones.
+		 */
+		void outline(Graphics2D g, Shape shape, double width)
+		{
+			float w = f(width);
+			g.setStroke(new BasicStroke(w));
+			g.draw(soft && w % 2 == 1 ? AffineTransform.getTranslateInstance(.5, .5).createTransformedShape(shape) : shape);
 		}
 		void center(Graphics2D g, String value, int x, int y, int size, Color colour, int maxWidth)
 		{

@@ -14,10 +14,10 @@ final class Celebration
 	final long sequence;
 	final long created;
 	final long due;
-	// Before an official quantity arrives: 1 means observed logged, 0 means unconfirmed.
-	int provisionalTotal;
+	// The quantity the collection log reported after this drop.
 	Integer confirmedTotal;
-	Integer lastSyncedTotal;
+	// The last collection log reading plus the drops counted since, this one included; null while never read.
+	Integer countedTotal;
 	String kc;
 	int lootTick = -1;
 	// Game tick of the collection log message that created this popup, before any loot joined it.

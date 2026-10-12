@@ -8,35 +8,7 @@ dependencies {
     compileOnly "net.runelite:client:${runeLiteVersion}"
     compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
-    testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.mockito:mockito-core:4.11.0'
-    testImplementation "net.runelite:client:${runeLiteVersion}"
-    testImplementation "net.runelite:jshell:${runeLiteVersion}"
 }
 group = 'com.collectioncelebrations'
-version = '1.2.1'
+version = '1.3'
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release.set(11) }
-// RuneLite.RUNELITE_DIR follows user.home: tests that start the plugin (getPluginDirectory, which also moves the old
-// collection-celebrations folder) must never touch the real ~/.runelite.
-test {
-    systemProperty 'user.home', layout.buildDirectory.dir('test-home').get().asFile.path
-}
-tasks.register('run', JavaExec) {
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.collectioncelebrations.CelebrationPluginTest'
-    jvmArgs '-ea'
-    args '--developer-mode', '--debug'
-}
-
-// Prepare the development launcher without starting RuneLite or touching login data.
-tasks.register('writeDevClasspath') {
-    dependsOn testClasses
-    def destination = layout.buildDirectory.file('dev/classpath.txt')
-    inputs.files(sourceSets.test.runtimeClasspath)
-    outputs.file(destination)
-    doLast {
-        def file = destination.get().asFile
-        file.parentFile.mkdirs()
-        file.text = sourceSets.test.runtimeClasspath.asPath
-    }
-}

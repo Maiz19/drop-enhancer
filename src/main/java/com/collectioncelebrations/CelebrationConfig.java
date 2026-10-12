@@ -310,17 +310,17 @@ public interface CelebrationConfig extends Config
 		return 10000000;
 	}
 
-	@Range(min = 60, max = 200)
-	@ConfigItem(keyName = "popupScale", name = "Popup scale (%)",
-				description = "Scale vector panel and text without enlarging a low-resolution panel bitmap", section = appearance,
+	@Range(min = 90, max = 250)
+	@ConfigItem(keyName = "popupSize", name = "Popup size (%)",
+				description = "At 100% the item image is drawn pixel for pixel, like in your inventory", section = appearance,
 				position = 2)
-	default int popupScale()
+	default int popupSize()
 	{
-		return 75;
+		return 100;
 	}
 
 	@ConfigItem(keyName = "showItemIcon", name = "Show item image", description = "Show the RuneLite item sprite", section = appearance,
-				position = 7)
+				position = 8)
 	default boolean showItemIcon()
 	{
 		return true;
@@ -341,7 +341,7 @@ public interface CelebrationConfig extends Config
 	}
 
 	@ConfigItem(keyName = "showTotal", name = "Show collection count",
-				description = "Show official or clearly labelled temporary collection quantity", section = appearance, position = 13)
+				description = "Show how many you have: the last collection log reading plus later drops, or a dash until the log is read", section = appearance, position = 13)
 	default boolean showTotal()
 	{
 		return true;
@@ -555,10 +555,17 @@ public interface CelebrationConfig extends Config
 		return PopupStat.WIKI_COMPLETION;
 	}
 
-	@ConfigItem(keyName = "textOutline", name = "Text outline",
-				description = "Dark edge behind the popup text. The popup is always drawn on whole pixels in the RuneScape font, "
-							  + "so it stays sharp in stretched mode.",
+	@ConfigItem(keyName = "popupRendering", name = "Rendering",
+				description = "Soft smooths the frame, rings, glows and stars. Hard draws them on whole pixels, so stretched mode "
+							  + "enlarges them as sharp blocks like the game's interface. Text and the item image are sharp in both.",
 				section = appearance, position = 6)
+	default PopupRendering popupRendering()
+	{
+		return PopupRendering.SOFT;
+	}
+
+	@ConfigItem(keyName = "textOutline", name = "Text outline", description = "Dark edge behind the popup text",
+				section = appearance, position = 7)
 	default TextOutline textOutline()
 	{
 		return TextOutline.SHADOW;

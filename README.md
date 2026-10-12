@@ -15,13 +15,13 @@ Configurable popups and sounds for collection log unlocks and other notable drop
 
 Turn on the game's collection log notifications (**Chat**, **Pop-up** or **Both**). With **Both**, Drop Enhancer still shows a single unlock notification.
 
-Open pages of your collection log so the plugin can read your item quantities. Those reset on logout or world hop.
+Open your collection log once so the plugin can read your item quantities; searching the log reads every item. Drop Enhancer remembers them per account and adds each drop it sees, so the popup shows your new total. Copies you got elsewhere, on mobile for example, are counted the next time you open the log. Until an item has been read, its count shows a dash.
 
 ## Options worth knowing
 
 **Combination rarity** uses the value tier as a minimum, with Ground Items value thresholds linked by default. Wiki completion can raise the tier of cheaper items, but cannot lower an expensive drop below its value tier. Turn off **Link to Ground Items values** to use your own GP cutoffs. Untradeable items use rarity only; pets keep their Pet tier.
 
-**Sharp in stretched mode** — the popup is drawn on whole pixels in the RuneScape font, without anti-aliasing, so stretched mode enlarges it as hard pixels like the game's own interface. **Text outline** adds RuneLite's shadow or outline behind the text.
+**Rendering** — **Soft** (default) smooths the frame, the medallion rings, the glows and the stars, keeping straight lines on whole pixels. **Hard** draws them on whole pixels, without anti-aliasing, so stretched mode enlarges them as sharp pixels like the game's own interface. Text and the item image are sharp in both: the RuneScape font on whole pixels and the sprite in whole-pixel blocks. **Text outline** adds RuneLite's shadow or outline behind the text.
 
 **Custom sounds** — put an uncompressed PCM `.wav` (up to 32 MB) in `.runelite/plugin-data/drop-enhancer/sounds/` (moved there from `.runelite/collection-celebrations/sounds/` on the first start of 1.2.1) and enter its filename in the tier's WAV setting. Keep the default filename for the bundled sound, or leave it blank to mute the tier.
 

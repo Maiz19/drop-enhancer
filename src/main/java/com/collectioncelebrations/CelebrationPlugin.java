@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.inject.Inject;
@@ -51,6 +52,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.Filepath;
 import net.runelite.client.util.Text;
 import net.runelite.api.widgets.Widget;
+import net.runelite.http.api.loottracker.LootRecordType;
 
 @PluginDescriptor(name = "Drop Enhancer", description = "Collection log, repeat drop popups and custom sounds",
 				  conflicts = {"Collection Log Popup Enhanced", "Custom Sounds"}, internalName = "drop-enhancer",
@@ -99,6 +101,10 @@ public class CelebrationPlugin extends Plugin
 	@Inject
 	WikiRarity wiki;
 	private final CollectionLedger ledger = new CollectionLedger();
+	// Saved in the RuneLite profile, which RuneLite keeps per account and world type.
+	private static final String COUNTS_KEY = "collectionCounts";
+	// The profile whose counts the ledger holds; null until the next event loads them.
+	private String countsProfile;
 	private final RevealQueue<Celebration> pending = new RevealQueue<>();
 	private final Map<String, Integer> names = new HashMap<>();
 	// Binary membership from genuine unlocks; never an inferred lifetime quantity.
@@ -139,7 +145,8 @@ public class CelebrationPlugin extends Plugin
 	@Override
 	protected void startUp() throws IOException
 	{
-		migrateTextOutline(configManager);
+		migrateTextRenderMode(configManager);
+		migratePopupScale(configManager);
 		Filepath folder = getPluginDirectory();
 		wiki.dataDirectory = folder.joinSegment("data");
 		sounds.soundDirectory = folder.joinSegment("sounds");
@@ -164,25 +171,52 @@ public class CelebrationPlugin extends Plugin
 		reset();
 		restorePaint();
 	}
-	/** Text used to have anti-aliased modes. The popup is always crisp now, so only its outline carries over. */
-	static void migrateTextOutline(ConfigManager configManager)
+	/**
+	 * The old text mode chose both the smoothing and the outline. RuneLite saves the new settings' defaults before
+	 * startUp, so while the old setting is still there, it decides both.
+	 */
+	static void migrateTextRenderMode(ConfigManager configManager)
 	{
 		String legacy = configManager.getConfiguration("collection-celebrations", "textRenderMode");
 		if (legacy == null)
 		{
 			return;
 		}
-		if (configManager.getConfiguration("collection-celebrations", "textOutline") == null)
-		{
-			configManager.setConfiguration("collection-celebrations", "textOutline",
-				"SMOOTH_OUTLINED".equals(legacy) ? TextOutline.SHADOW : TextOutline.NONE);
-		}
+		configManager.setConfiguration("collection-celebrations", "textOutline",
+			"SMOOTH_OUTLINED".equals(legacy) ? TextOutline.SHADOW : TextOutline.NONE);
+		configManager.setConfiguration("collection-celebrations", "popupRendering",
+			"CRISP".equals(legacy) ? PopupRendering.HARD : PopupRendering.SOFT);
 		configManager.unsetConfiguration("collection-celebrations", "textRenderMode");
+	}
+	/**
+	 * Popup scale (%) became Popup size (%), whose 100% is the old 64%: small, with the item pixel for pixel. RuneLite
+	 * saves the new setting's default before startUp, so while the old setting is still there, it decides the size.
+	 */
+	static void migratePopupScale(ConfigManager configManager)
+	{
+		String legacy = configManager.getConfiguration("collection-celebrations", "popupScale");
+		if (legacy == null)
+		{
+			return;
+		}
+		try
+		{
+			long size = Math.round(Integer.parseInt(legacy.trim()) / CelebrationOverlay.BASE_SCALE);
+			configManager.setConfiguration("collection-celebrations", "popupSize", (int)Math.max(90, Math.min(250, size)));
+		}
+		catch (NumberFormatException ignored)
+		{
+			// Unreadable: the default size stays.
+		}
+		configManager.unsetConfiguration("collection-celebrations", "popupScale");
 	}
 	private void reset()
 	{
 		previews.clear();
+		// Saved to the profile they came from, and loaded again on the next event after login or a hop.
+		saveCounts();
 		ledger.clear();
+		countsProfile = null;
 		names.clear();
 		knownLoggedNames.clear();
 		pending.clear();
@@ -219,6 +253,30 @@ public class CelebrationPlugin extends Plugin
 		gate.refresh();
 		cox.tick();
 		recentLoot.values().removeIf(c -> now() - c.created > REWARD_MATCH_MS);
+		// Once a tick at most: opening the log reads hundreds of items in one go.
+		saveCounts();
+	}
+
+	/** Puts the logged-in account's own counts in the ledger, so none cross to another account or world type. */
+	private void followProfile()
+	{
+		String profile = configManager.getRSProfileKey();
+		if (Objects.equals(profile, countsProfile))
+		{
+			return;
+		}
+		saveCounts();
+		ledger.load(profile == null ? null : configManager.getConfiguration("collection-celebrations", profile, COUNTS_KEY));
+		countsProfile = profile;
+	}
+
+	private void saveCounts()
+	{
+		String counts = countsProfile == null ? null : ledger.changes();
+		if (counts != null)
+		{
+			configManager.setConfiguration("collection-celebrations", countsProfile, COUNTS_KEY, counts);
+		}
 	}
 
 	@Subscribe
@@ -283,7 +341,8 @@ public class CelebrationPlugin extends Plugin
 		{
 			return;
 		}
-		ledger.observe(id, quantity, ++sequence);
+		followProfile();
+		ledger.observe(id, quantity);
 		ItemComposition definition = items.getItemComposition(id);
 		String name = definition == null ? null : definition.getName();
 		if (name != null)
@@ -360,6 +419,7 @@ public class CelebrationPlugin extends Plugin
 			{
 				c.newSlot = true;
 				c.extraItem = false;
+				countFirstCopies(c);
 				return;
 			}
 		}
@@ -370,6 +430,7 @@ public class CelebrationPlugin extends Plugin
 			{
 				recent.newSlot = true;
 				recent.extraItem = false;
+				countFirstCopies(recent);
 				if (!recent.presented)
 				{
 					pending.add(recent);
@@ -390,6 +451,17 @@ public class CelebrationPlugin extends Plugin
 		// Keep the unlock available for a late loot event even after its popup has started.
 		recentLoot.put(name.toLowerCase(Locale.ROOT), unlocked);
 	}
+
+	/** A new slot means the log held none before this drop, whatever an older reading said. */
+	private void countFirstCopies(Celebration c)
+	{
+		if (c.lootTick >= 0 && c.itemId >= 0)
+		{
+			followProfile();
+			ledger.observe(c.itemId, 0);
+			c.countedTotal = ledger.add(c.itemId, c.dropQuantity);
+		}
+	}
 	@Subscribe
 	public void onLootReceived(LootReceived e)
 	{
@@ -400,6 +472,7 @@ public class CelebrationPlugin extends Plugin
 		// LootTracker emits this once for its NPC/chest/activity records. Do not additionally
 		// subscribe to NpcLootReceived and double-handle the same reward.
 		gate.noteReward(e.getName());
+		followProfile();
 
 		long now = now();
 		long rewardSequence = ++sequence;
@@ -481,8 +554,13 @@ public class CelebrationPlugin extends Plugin
 				target.itemId = id;
 				target.source = e.getName();
 				target.dropQuantity = stack.getValue();
-				CollectionLedger.Entry count = ledger.get(id);
-				target.lastSyncedTotal = count == null ? null : count.quantity;
+				if (target.newSlot)
+				{
+					// The unlock came first: the log held none before this drop.
+					ledger.observe(id, 0);
+				}
+				// Loot from another player never enters the collection log.
+				target.countedTotal = e.getType() == LootRecordType.PLAYER ? ledger.get(id) : ledger.add(id, stack.getValue());
 				attachKc(target);
 				if (target.presented)
 				{
@@ -815,18 +893,16 @@ public class CelebrationPlugin extends Plugin
 					{
 						c.itemId = names.getOrDefault(c.name.toLowerCase(Locale.ROOT), -1);
 					}
-					Integer confirmed = ledger.confirmedAfter(c.itemId, c.sequence);
-					if (confirmed != null)
+					followProfile();
+					if (ledger.get(c.itemId) != null)
 					{
-						c.confirmedTotal = confirmed;
-					}
-					CollectionLedger.Entry snapshot = ledger.get(c.itemId);
-					if (snapshot != null)
-					{
-						c.lastSyncedTotal = snapshot.quantity;
 						c.extraItem = false;
 					}
-					c.provisionalTotal = knownLoggedNames.contains(c.name.toLowerCase(Locale.ROOT)) ? 1 : 0;
+					// An unlock without loot, like a quest reward, is the first copy.
+					if (c.newSlot && c.countedTotal == null)
+					{
+						c.countedTotal = c.dropQuantity;
+					}
 				}
 				preparePresentation(c);
 				if (!popupExcluded(c) && (c.previewTier != null || c.newSlot || popupIncluded(c.name, c.dropQuantity) ||
