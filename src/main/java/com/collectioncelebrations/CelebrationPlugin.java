@@ -286,10 +286,11 @@ public class CelebrationPlugin extends Plugin
 		{
 			gate.noteDoomInterface();
 		}
-		// The chest is the intended reveal, but private storage and the bank mean the player has
-		// moved on without it; leaving a unique hidden for the rest of the session helps nobody.
-		if (e.getGroupId() == InterfaceID.RAIDS_REWARDS || e.getGroupId() == InterfaceID.RAIDS_STORAGE_PRIVATE
-			|| e.getGroupId() == InterfaceID.BANKMAIN)
+		// The chest is the intended reveal. Private storage and the bank only release a unique already
+		// held: the player has moved on without the chest. Before a unique they mean nothing, and private
+		// storage is often opened early in the raid.
+		if (e.getGroupId() == InterfaceID.RAIDS_REWARDS || ((e.getGroupId() == InterfaceID.RAIDS_STORAGE_PRIVATE
+			|| e.getGroupId() == InterfaceID.BANKMAIN) && cox.holding()))
 		{
 			cox.noteChestOpened();
 		}
@@ -492,13 +493,8 @@ public class CelebrationPlugin extends Plugin
 				stacks.merge(id, stack.getQuantity(), (a, b) -> (int)Math.min(Integer.MAX_VALUE, (long)a + b));
 			}
 		}
-		custom.onLootReceived(e, rawId -> {
-			int id = items.canonicalize(rawId);
-			ItemComposition item = items.getItemComposition(id);
-			String name = item == null ? "" : item.getName();
-			return ledger.get(id) != null || (name != null && knownLoggedNames.contains(name.toLowerCase(Locale.ROOT))) ||
-				wiki.entry(id, name) != null || popupIncluded(name, stacks.getOrDefault(id, 0));
-		}, audioGroup);
+		// Drops that become a popup sound with it; every other drop keeps its own value sound.
+		Set<Integer> popups = new HashSet<>();
 		for (Map.Entry<Integer, Integer> stack : stacks.entrySet())
 		{
 			int id = stack.getKey();
@@ -544,7 +540,18 @@ public class CelebrationPlugin extends Plugin
 					// A received collection-item drop can be presented before personal quantities sync.
 					// Ownership and exact totals still require authoritative collection-log data.
 					pending.add(target);
+					popups.add(stack.getKey());
 				}
+				else if ((knownOwned || collectionType) && popupExcluded(target))
+				{
+					// An excluded collection item stays silent, as it does with repeat popups on.
+					popups.add(stack.getKey());
+				}
+			}
+			else
+			{
+				// The unlock this drop belongs to.
+				popups.add(stack.getKey());
 			}
 			if (target != null)
 			{
@@ -573,6 +580,7 @@ public class CelebrationPlugin extends Plugin
 				}
 			}
 		}
+		custom.onLootReceived(e, rawId -> popups.contains(items.canonicalize(rawId)), audioGroup);
 	}
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event)
@@ -955,6 +963,12 @@ public class CelebrationPlugin extends Plugin
 					config.highlightedItemSound() && custom.highlighted(c.name, c.dropQuantity))
 				{
 					custom.offerHighlightedReward(c.itemId, c.dropQuantity, c.tier, c.name, c.audioGroup);
+				}
+				else if (!popupExcluded(c) && c.previewTier == null && c.lootTick >= 0 && config.collectionAudio())
+				{
+					// No popup for this drop after all, say a repeat of a tier without repeat popups: its
+					// value sound was held back for the popup, so it plays now like any other drop's.
+					custom.offerValueSound(c.itemId, c.dropQuantity, c.audioGroup);
 				}
 			}
 		}

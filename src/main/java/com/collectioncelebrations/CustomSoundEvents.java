@@ -76,11 +76,17 @@ public class CustomSoundEvents
 			// Noted and placeholder ids resolve to the tradeable item, so name, price and the
 			// collection check below all describe the same item the popup shows.
 			int id = itemManager.canonicalize(stack.getId());
-			handleItem(id, stack.getQuantity(), collectionItem.test(id), group);
+			handleItem(id, stack.getQuantity(), collectionItem.test(id), group, true);
 		}
 	}
 
-	private void handleItem(int id, int quantity, boolean collectionItem, long group)
+	/** The value sound of a drop that was held back for a popup that did not show after all. Its clue sound already played. */
+	public void offerValueSound(int id, int quantity, long group)
+	{
+		handleItem(id, quantity, false, group, false);
+	}
+
+	private void handleItem(int id, int quantity, boolean collectionItem, long group, boolean clues)
 	{
 		final ItemComposition itemComposition = itemManager.getItemComposition(id);
 		if (itemComposition == null || itemComposition.getName() == null || quantity <= 0)
@@ -99,28 +105,28 @@ public class CustomSoundEvents
 		final int haPrice = (int)Math.min(Integer.MAX_VALUE, (long)Math.max(0, itemComposition.getHaPrice()) * quantity);
 		final int value = getValueByMode(gePrice, haPrice);
 
-		if (config.beginnerClueSound() && name.contains("clue scroll (beginner)"))
+		if (clues && config.beginnerClueSound() && name.contains("clue scroll (beginner)"))
 		{
 			playValueSound(BEGINNER_CLUE_SOUND_FILE, name, group);
 		}
-		if (config.easyClueSound() && name.contains("clue scroll (easy)"))
+		if (clues && config.easyClueSound() && name.contains("clue scroll (easy)"))
 		{
 			playValueSound(EASY_CLUE_SOUND_FILE, name, group);
 		}
-		if (config.mediumClueSound() && name.contains("clue scroll (medium)"))
+		if (clues && config.mediumClueSound() && name.contains("clue scroll (medium)"))
 		{
 			playValueSound(MEDIUM_CLUE_SOUND_FILE, name, group);
 		}
-		if (config.hardClueSound() && name.contains("clue scroll (hard)"))
+		if (clues && config.hardClueSound() && name.contains("clue scroll (hard)"))
 		{
 			playValueSound(HARD_CLUE_SOUND_FILE, name, group);
 		}
 
-		if (config.eliteClueSound() && name.contains("clue scroll (elite)"))
+		if (clues && config.eliteClueSound() && name.contains("clue scroll (elite)"))
 		{
 			playValueSound(ELITE_CLUE_SOUND_FILE, name, group);
 		}
-		if (config.masterClueSound() && name.contains("clue scroll (master)"))
+		if (clues && config.masterClueSound() && name.contains("clue scroll (master)"))
 		{
 			playValueSound(MASTER_CLUE_SOUND_FILE, name, group);
 		}
