@@ -307,22 +307,30 @@ public class CelebrationPlugin extends Plugin
 				replacedNotification = null;
 				replacedItem = null;
 				restorePaint();
+				// The text is already set when the popup starts. A held Chambers unique is hidden from its
+				// first frame; waiting for the delay script would show it briefly.
+				String main = client.getVarcStrValue(VarClientID.NOTIFICATION_MAIN);
+				String name = notificationItem(main);
+				if (name != null)
+				{
+					cox.arm(name);
+					if (cox.holding() && cox.covers(name))
+					{
+						replacedNotification = main;
+						replacedItem = name;
+					}
+				}
 			}
 			else if (e.getScriptId() == ScriptID.NOTIFICATION_DELAY && notificationStarted)
 			{
 				notificationStarted = false;
-				String title = client.getVarcStrValue(VarClientID.NOTIFICATION_TITLE);
 				String main = client.getVarcStrValue(VarClientID.NOTIFICATION_MAIN);
-				String text = main == null ? "" : Text.removeTags(main).trim();
-				if ("Collection log".equalsIgnoreCase(title) && text.startsWith("New item:"))
+				String name = notificationItem(main);
+				if (name != null)
 				{
-					String name = text.substring("New item:".length()).trim();
-					if (!name.isEmpty())
-					{
-						unlock(name);
-						replacedNotification = main;
-						replacedItem = name;
-					}
+					unlock(name);
+					replacedNotification = main;
+					replacedItem = name;
 				}
 			}
 		}
@@ -368,6 +376,19 @@ public class CelebrationPlugin extends Plugin
 			}
 		}
 	}
+	/** @return the item a native collection log popup announces, or null for any other popup */
+	private String notificationItem(String main)
+	{
+		String title = client.getVarcStrValue(VarClientID.NOTIFICATION_TITLE);
+		String text = main == null ? "" : Text.removeTags(main).trim();
+		if (!"Collection log".equalsIgnoreCase(title) || !text.startsWith("New item:"))
+		{
+			return null;
+		}
+		String name = text.substring("New item:".length()).trim();
+		return name.isEmpty() ? null : name;
+	}
+
 	@Subscribe
 	public void onChatMessage(ChatMessage e)
 	{
@@ -868,6 +889,7 @@ public class CelebrationPlugin extends Plugin
 			return;
 		}
 		long now = now();
+		gate.frame();
 		boolean hold = gate.blocked();
 		overlay.advance(now, hold);
 		boolean presentationStarted = false;

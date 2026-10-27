@@ -25,6 +25,9 @@ class CaseGate
 	OverlayManager overlays;
 	// Time for a case to appear after its reward before the queue gives up waiting.
 	private static final long START_GRACE_MILLIS = 2000;
+	// Loot Case decides on the loot event itself and draws its reel on the next frame, and only for
+	// an item in its own table: a raid without a purple never spins. A few frames tell the two apart.
+	private static final int LOOT_START_FRAMES = 3;
 	// Clue Case: casket drop (900) + opening (1450) + reel (4000). Its overlay reports no size.
 	private static final long CLUE_SPIN_MILLIS = 6500;
 	// Safety cap in case the Loot Case reel never reports that it stopped.
@@ -34,6 +37,7 @@ class CaseGate
 	private Overlay lootOverlay;
 	private long graceUntil;
 	private long spinStarted;
+	private int framesToWait;
 	private static final Set<String> LOOT_SOURCES =
 		Set.of("corrupted hunllef", "crystalline hunllef", "theatre of blood", "chambers of xeric", "tombs of amascut", "lunar chest",
 			   "barrows", "hallowed sepulchre grand coffin", "elven crystal chest", "chest (moon key)", "larran's big chest",
@@ -46,15 +50,30 @@ class CaseGate
 	{
 		graceUntil = 0;
 		spinStarted = 0;
+		framesToWait = 0;
 	}
 	void noteReward(String source)
 	{
 		String name = source == null ? "" : source.toLowerCase(Locale.ROOT);
-		if (((clue && name.startsWith("clue scroll")) || (loot && LOOT_SOURCES.contains(name))))
+		// Doom's case starts from its reward interface, not from this event.
+		if ((clue && name.startsWith("clue scroll")) || (loot && name.equals("doom of mokhaiotl")))
 		{
 			awaitCase();
 		}
+		else if (loot && LOOT_SOURCES.contains(name) && spinStarted == 0)
+		{
+			framesToWait = LOOT_START_FRAMES;
+		}
 	}
+	/** Called once per rendered frame, before anything asks whether the queue is blocked. */
+	void frame()
+	{
+		if (framesToWait > 0)
+		{
+			framesToWait--;
+		}
+	}
+	/** Loot Case reads Doom's reward from this interface on a later tick, so it gets the timed grace. */
 	void noteDoomInterface()
 	{
 		if (loot)
@@ -104,12 +123,13 @@ class CaseGate
 		if (!clueSpin && !lootSpin)
 		{
 			spinStarted = 0;
-			return now < graceUntil;
+			return now < graceUntil || (loot && framesToWait > 0);
 		}
 		if (spinStarted == 0)
 		{
 			spinStarted = now;
 			graceUntil = 0;
+			framesToWait = 0;
 		}
 		// Clue Case keeps the reward screen hidden until the result is dismissed, so its spin is timed.
 		return now - spinStarted < (lootSpin ? LOOT_SPIN_LIMIT_MILLIS : CLUE_SPIN_MILLIS);

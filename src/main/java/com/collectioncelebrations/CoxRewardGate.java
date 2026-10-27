@@ -34,6 +34,8 @@ class CoxRewardGate
 
 	private final List<MessageNode> censored = new ArrayList<>();
 	private final List<String> originals = new ArrayList<>();
+	// RuneLite builds a line from its own format text when it has one, so that text is censored too.
+	private final List<String> originalFormats = new ArrayList<>();
 	private boolean awaitingChest;
 	private boolean revealed;
 	private boolean wasInside;
@@ -161,7 +163,14 @@ class CoxRewardGate
 		}
 		censored.add(node);
 		originals.add(value);
+		String format = node.getRuneLiteFormatMessage();
+		originalFormats.add(format);
 		node.setValue(value.substring(0, at + prefix.length()) + "???");
+		int formatAt = format == null ? -1 : format.indexOf(prefix);
+		if (formatAt >= 0)
+		{
+			node.setRuneLiteFormatMessage(format.substring(0, formatAt + prefix.length()) + "???");
+		}
 		client.refreshChat();
 	}
 
@@ -181,21 +190,26 @@ class CoxRewardGate
 		}
 		for (int i = 0; i < censored.size(); i++)
 		{
-			censored.get(i).setValue(originals.get(i));
+			MessageNode node = censored.get(i);
+			node.setValue(originals.get(i));
+			if (originalFormats.get(i) != null)
+			{
+				node.setRuneLiteFormatMessage(originalFormats.get(i));
+			}
 		}
 		censored.clear();
 		originals.clear();
+		originalFormats.clear();
 		client.refreshChat();
 	}
 
 	/**
-	 * Logging out clears the chat itself, so nothing is restored: the held celebration is dropped
-	 * with the rest of the session, exactly as a queued reward already is.
+	 * The held celebration is dropped with the rest of the session, exactly as a queued reward
+	 * already is. Its chat lines are put back: a world hop keeps the chat, and no chest is coming.
 	 */
 	void reset()
 	{
-		censored.clear();
-		originals.clear();
+		reveal();
 		awaitingChest = false;
 		revealed = false;
 		wasInside = false;
