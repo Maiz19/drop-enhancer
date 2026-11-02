@@ -43,7 +43,7 @@ class WikiRarity
 	private volatile Map<Integer, Entry> entries = Map.of();
 	private volatile WikiDropRates wikiDrops = new WikiDropRates();
 	/** Raised whenever stored rates gain a new shape, so an older cache is replaced rather than shown. */
-	private static final int CACHE_FORMAT = 1;
+	private static final int CACHE_FORMAT = 2;
 	private static final long FORCE_INTERVAL = 60000L;
 	private volatile long lastForced;
 	private ExecutorService loader;
@@ -394,23 +394,41 @@ class WikiRarity
 
 	String dropRateText(String source, String name)
 	{
-		Double exact = source == null ? null : dropRates.dropProbability(source, name);
-		if (exact != null)
+		return dropRateText(source, name, null);
+	}
+
+	/** @param raid how the raid the drop came from was played, or null */
+	String dropRateText(String source, String name, RaidRates.Played raid)
+	{
+		String played = RaidRates.rate(raid, name, wikiDrops::find);
+		if (played != null)
 		{
-			return probabilityText(exact);
+			return played;
 		}
+		// The wiki first: the local dataset is an older snapshot, and its plain "Skeleton" rate is not every skeleton's.
 		String online = wikiDrops.find(source, name);
 		if (online != null)
 		{
 			return online;
 		}
+		Double exact = source == null ? null : dropRates.dropProbability(source, name);
+		if (exact != null)
+		{
+			return probabilityText(exact);
+		}
 		// Withhold the name-only rate only where the wiki actually lists this source, so an item it
 		// does not carry stays blank rather than borrowing another source's number. For a source the
 		// tables never mention - an unloaded dataset, or a name the game words differently - the
-		// local dataset remains the best answer there is.
+		// item's rate by name remains the best answer there is.
 		if (wikiDrops.covers(source))
 		{
 			return null;
+		}
+		// An unknown source by item name: the wiki's one rate everywhere, or "Varies" where it depends on the source.
+		String anywhere = wikiDrops.find(null, name);
+		if (anywhere != null)
+		{
+			return anywhere;
 		}
 		List<DropRateResolver.SourceRate> matches = dropRates.dropRatesByItemName(name);
 		if (matches.size() == 1)
@@ -419,7 +437,7 @@ class WikiRarity
 		}
 		if (matches.size() > 1)
 		{
-			return "Varies";
+			return WikiDropRates.VARIES;
 		}
 		return null;
 	}

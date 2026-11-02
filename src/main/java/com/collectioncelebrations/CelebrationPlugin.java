@@ -36,6 +36,7 @@ import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.gameval.VarClientID;
 import net.runelite.client.config.ConfigManager;
@@ -92,6 +93,8 @@ public class CelebrationPlugin extends Plugin
 	CaseGate gate;
 	@Inject
 	CoxRewardGate cox;
+	@Inject
+	RaidRates raids;
 	@Inject
 	SoundQueue sounds;
 	@Inject
@@ -252,6 +255,7 @@ public class CelebrationPlugin extends Plugin
 	{
 		gate.refresh();
 		cox.tick();
+		raids.tick();
 		recentLoot.values().removeIf(c -> now() - c.created > REWARD_MATCH_MS);
 		// Once a tick at most: opening the log reads hundreds of items in one go.
 		saveCounts();
@@ -514,6 +518,8 @@ public class CelebrationPlugin extends Plugin
 				stacks.merge(id, stack.getQuantity(), (a, b) -> (int)Math.min(Integer.MAX_VALUE, (long)a + b));
 			}
 		}
+		// Read while the chest is open: the raid's mode, level or waves are gone by the time a queued popup shows.
+		RaidRates.Played raid = raids.capture(e.getName(), stacks.containsKey(ItemID.DIZANAS_QUIVER_UNCHARGED));
 		// Drops that become a popup sound with it; every other drop keeps its own value sound.
 		Set<Integer> popups = new HashSet<>();
 		for (Map.Entry<Integer, Integer> stack : stacks.entrySet())
@@ -581,6 +587,7 @@ public class CelebrationPlugin extends Plugin
 				target.lootTick = tick;
 				target.itemId = id;
 				target.source = e.getName();
+				target.raid = raid;
 				target.dropQuantity = stack.getValue();
 				if (target.newSlot)
 				{
@@ -823,7 +830,7 @@ public class CelebrationPlugin extends Plugin
 
 	private void preparePresentation(Celebration c)
 	{
-		c.dropRateText = wiki.dropRateText(c.source, c.name);
+		c.dropRateText = wiki.dropRateText(c.source, c.name, c.raid);
 		WikiRarity.Entry entry = wiki.entry(c.itemId, c.name);
 		if (entry != null)
 		{

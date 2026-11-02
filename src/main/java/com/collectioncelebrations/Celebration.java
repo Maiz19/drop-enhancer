@@ -28,6 +28,8 @@ final class Celebration
 	boolean untradeable;
 	Double wikiCompletion;
 	String dropRateText;
+	// How the raid this drop came from was played, for the rate table it used; null for any other drop.
+	RaidRates.Played raid;
 	long audioGroup;
 	boolean audible;
 	Celebration(String name, int itemId, int dropQuantity, String source, boolean newSlot, long sequence, long now, long delay)

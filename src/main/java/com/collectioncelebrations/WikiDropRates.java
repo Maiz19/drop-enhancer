@@ -29,6 +29,39 @@ final class WikiDropRates
 	private static final BigDecimal GROUPED = new BigDecimal(10000);
 	private static final Pattern FRACTION = Pattern.compile("(\\d[\\d,]*(?:\\.\\d+)?)/(\\d[\\d,]*(?:\\.\\d+)?)");
 
+	/**
+	 * Loot the game names otherwise than the wiki: a boss or activity whose rewards the wiki files under a chest or
+	 * casket. A Hunllef names its chest's variant: the plain chest would span both, at very different rates.
+	 */
+	private static final Map<String, String> GAME_SOURCES = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+	static
+	{
+		GAME_SOURCES.put("Crystalline Hunllef", "Reward Chest (The Gauntlet)#Regular");
+		GAME_SOURCES.put("Corrupted Hunllef", "Reward Chest (The Gauntlet)#Corrupted");
+		GAME_SOURCES.put("Barrows", "Chest (Barrows)");
+		GAME_SOURCES.put("Chambers of Xeric", "Ancient chest");
+		GAME_SOURCES.put("Theatre of Blood", "Monumental chest");
+		GAME_SOURCES.put("Tombs of Amascut", "Chest (Tombs of Amascut)");
+		GAME_SOURCES.put("Fortis Colosseum", "Rewards Chest (Fortis Colosseum)");
+		GAME_SOURCES.put("Fractured Archive", "Chest (The Fractured Archive)");
+		GAME_SOURCES.put("Reward cart (Wintertodt)", "Reward Cart");
+		GAME_SOURCES.put("Reward pool (Tempoross)", "Reward pool");
+		GAME_SOURCES.put("Barbarian Assault high gamble", "Barbarian Assault/Gambles");
+		GAME_SOURCES.put("Bryophyta (Chest)", "Chest (Bryophyta's lair)");
+		for (String tier : List.of("beginner", "easy", "medium", "hard", "elite", "master"))
+		{
+			GAME_SOURCES.put("Clue Scroll (" + tier + ")", "Reward casket (" + tier + ")");
+		}
+		// Mort'ton's shade chests go by the key that opens them: "Gold key red" is the wiki's "Gold Chest (red)".
+		for (String metal : List.of("Bronze", "Steel", "Black", "Silver", "Gold"))
+		{
+			for (String trim : List.of("red", "brown", "crimson", "black", "purple"))
+			{
+				GAME_SOURCES.put(metal + " key " + trim, metal + " Chest (" + trim + ")");
+			}
+		}
+	}
+
 	private final Map<String, Map<String, String>> sources = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 	/** Slot aliases kept apart from {@link #sources} so an alias can never shadow an item of the same name. */
 	private final Map<String, Map<String, String>> slots = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
@@ -36,6 +69,7 @@ final class WikiDropRates
 	/**
 	 * @return whether the wiki tables list this source at all. A miss on a listed source is a real
 	 *         absence; a source the tables never mention says nothing, and local data still applies.
+	 *         A renamed source always counts as listed: local data cannot tell a chest's variants apart.
 	 */
 	boolean covers(String source)
 	{
@@ -43,8 +77,15 @@ final class WikiDropRates
 		{
 			return false;
 		}
+		String key = key(source);
+		return GAME_SOURCES.containsValue(key) || sources.containsKey(key) || slots.containsKey(key);
+	}
+
+	/** @return the wiki's name for a game loot source. */
+	static String key(String source)
+	{
 		String key = source.replace('_', ' ').trim();
-		return sources.containsKey(key) || slots.containsKey(key);
+		return GAME_SOURCES.getOrDefault(key, key);
 	}
 
 	/** @return whether {@code source} is specific enough to look up in the wiki's drop tables. */
@@ -91,6 +132,11 @@ final class WikiDropRates
 			{
 				// A game loot event usually lacks the wiki's variant, so the base source spans them all.
 				add(source.substring(0, variant), item, rate, true);
+			}
+			else if (source.endsWith(")") && source.indexOf(" (") > 0)
+			{
+				// "Skeleton (Shayzien Crypts)": the wiki adds the place to an NPC with several pages; the game does not.
+				add(source.substring(0, source.indexOf(" (")), item, rate, true);
 			}
 		}
 	}
@@ -153,7 +199,7 @@ final class WikiDropRates
 	}
 
 	/** @return the chance of a plain {@code a/b} rate, or -1 for anything a range must not span. */
-	private static double probability(String rate)
+	static double probability(String rate)
 	{
 		Matcher fraction = FRACTION.matcher(rate);
 		if (!fraction.matches())
@@ -206,7 +252,7 @@ final class WikiDropRates
 		}
 		if (knownSource(source))
 		{
-			String key = source.replace('_', ' ').trim();
+			String key = key(source);
 			String rate = rateFrom(sources, key, item);
 			return rate != null ? rate : rateFrom(slots, key, item);
 		}
