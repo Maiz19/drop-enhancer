@@ -1,7 +1,6 @@
 /* Copyright (c) 2026 maiz. BSD-2-Clause; see LICENSE. */
 package com.collectioncelebrations;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
@@ -37,7 +36,7 @@ final class SoundResources
 		InputStream resource = SoundQueue.validName(name) ? SoundResources.class.getResourceAsStream("/sounds/" + name) : null;
 		if (resource == null)
 		{
-			throw new FileNotFoundException("Sound is not installed: " + name);
+			throw new IOException("Sound is not installed: " + name);
 		}
 		try (InputStream input = resource)
 		{
