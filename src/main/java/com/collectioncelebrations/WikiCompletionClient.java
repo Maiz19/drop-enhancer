@@ -121,7 +121,7 @@ final class WikiCompletionClient
 		}
 		Request request = new Request.Builder()
 							  .url(url)
-							  .header("User-Agent", "DropEnhancer/0.1 (RuneLite plugin; +https://github.com/Quentin242/drop-enhancer)")
+							  .header("User-Agent", "DropEnhancer (RuneLite plugin; +https://github.com/Maiz19/drop-enhancer)")
 							  .header("Accept", "application/json")
 							  .build();
 		Call call = client().newCall(request);
