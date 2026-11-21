@@ -56,7 +56,7 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.http.api.loottracker.LootRecordType;
 
 @PluginDescriptor(name = "Drop Enhancer", description = "Collection log, repeat drop popups and custom sounds",
-				  conflicts = {"Collection Log Popup Enhanced", "Custom Sounds"}, internalName = "drop-enhancer",
+				  internalName = "drop-enhancer",
 				  // Users' own sounds and the wiki caches, moved into the plugin directory once.
 				  legacyDataDirectory = "collection-celebrations")
 public class CelebrationPlugin extends Plugin
@@ -318,11 +318,10 @@ public class CelebrationPlugin extends Plugin
 				if (name != null)
 				{
 					cox.arm(name);
-					if (cox.holding() && cox.covers(name))
-					{
-						replacedNotification = main;
-						replacedItem = name;
-					}
+					// Every collection log popup is replaced from its first frame: waiting for the delay
+					// script let the game's own popup flash before it was hidden.
+					replacedNotification = main;
+					replacedItem = name;
 				}
 			}
 			else if (e.getScriptId() == ScriptID.NOTIFICATION_DELAY && notificationStarted)

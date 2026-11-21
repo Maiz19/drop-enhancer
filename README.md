@@ -33,6 +33,6 @@ Open your collection log once so the plugin can read your item quantities; searc
 
 ## Credits
 
-Based on [Collection Log Popup Enhanced](https://github.com/TimHeessels/collection-log-popup-enhanced) by SnakeSteak and [Custom Sounds](https://github.com/daanbom/Custom-Drop-Sounds) by daanbom. Integration by maiz. RuneLite provides client assets; optional wiki data credits OSRS Wiki contributors.
+Based on [Collection Log Popup Enhanced](https://runelite.net/plugin-hub/show/collection-log-popup-enhanced) by SnakeSteak and [Custom Sounds](https://runelite.net/plugin-hub/show/custom-drop-sounds) by daanbom. Integration by maiz. Drop Enhancer replaces both: turn them off while it is on, or you get every popup and sound twice. RuneLite provides client assets; optional wiki data credits OSRS Wiki contributors.
 
 Source code is [BSD-2-Clause](LICENSE). Rare, Very rare and collection-log sounds are courtesy of **daanbom / Custom Sounds**, used with permission; Common, Uncommon and Pet are original synthesized sounds. Full credits and upstream licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [audio terms](AUDIO-PERMISSION.md).
