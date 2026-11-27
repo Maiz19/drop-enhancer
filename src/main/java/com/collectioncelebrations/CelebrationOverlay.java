@@ -48,11 +48,20 @@ class CelebrationOverlay extends Overlay
 	ItemManager items;
 	@Inject
 	CelebrationConfig config;
-	@Inject
 	net.runelite.client.plugins.grounditems.GroundItemsConfig groundItemsConfig;
 	private Celebration current;
 	private long remaining, lifetime, lastFrame;
 	private boolean held;
+
+	/**
+	 * Ground Items' settings (hidden items, value tiers and colours), read as they are saved. Not a binding of the
+	 * plugin: see {@link CelebrationPlugin#provideConfig}.
+	 */
+	@Inject
+	void readGroundItems(net.runelite.client.config.ConfigManager manager)
+	{
+		groundItemsConfig = manager.getConfig(net.runelite.client.plugins.grounditems.GroundItemsConfig.class);
+	}
 
 	CelebrationOverlay()
 	{

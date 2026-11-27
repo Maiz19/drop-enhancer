@@ -22,8 +22,17 @@ public class CustomSoundEvents
 	@Inject
 	SoundQueue soundQueue;
 
-	@Inject
 	GroundItemsConfig groundItemsConfig;
+
+	/**
+	 * Ground Items' settings (hidden items, value tiers and colours), read as they are saved. Not a binding of the
+	 * plugin: see {@link CelebrationPlugin#provideConfig}.
+	 */
+	@Inject
+	void readGroundItems(net.runelite.client.config.ConfigManager manager)
+	{
+		groundItemsConfig = manager.getConfig(GroundItemsConfig.class);
+	}
 
 	@Inject
 	ItemManager itemManager;

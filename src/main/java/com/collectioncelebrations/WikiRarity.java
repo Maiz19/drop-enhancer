@@ -45,7 +45,12 @@ class WikiRarity
 	/** Raised whenever stored rates gain a new shape, so an older cache is replaced rather than shown. */
 	private static final int CACHE_FORMAT = 2;
 	private static final long FORCE_INTERVAL = 60000L;
+	/** How old the item list may be when the game announces an item it does not hold. */
+	static final long UNKNOWN_ITEM_INTERVAL = 24 * 60 * 60 * 1000L;
 	private volatile long lastForced;
+	/** When the installed item list left the wiki, and when an unknown item last asked for a newer one. */
+	private volatile long listFetchedAt, lastUnknownItem;
+	java.util.function.LongSupplier clock = System::currentTimeMillis;
 	private ExecutorService loader;
 	private volatile int generation;
 	/** The plugin directory's data folder: optional local data and the wiki caches. Set by the plugin before start. */
@@ -159,7 +164,7 @@ class WikiRarity
 			return;
 		}
 		// Every forced refresh is a full re-download, so flicking the switch cannot repeat one.
-		long now = System.currentTimeMillis();
+		long now = clock.getAsLong();
 		boolean force = config.refreshWikiData() && now - lastForced >= FORCE_INTERVAL;
 		if (force)
 		{
@@ -169,10 +174,60 @@ class WikiRarity
 		start(force);
 	}
 
+	/**
+	 * The game announced a collection log item the list lacks, so the list is behind the game: the wiki adds new
+	 * items some days after an update, and the weekly refresh may have run before that. Asks the wiki again, at most
+	 * once a day and never for a list fetched within the last day.
+	 */
+	void unknownItem()
+	{
+		// Called on the client thread: the usual answer is "checked recently", given without waiting for a lock.
+		long now = clock.getAsLong();
+		if (listCheckedWithinADay(now))
+		{
+			return;
+		}
+		synchronized (this)
+		{
+			if (loader == null || !config.refreshWikiData() || listCheckedWithinADay(now))
+			{
+				return;
+			}
+			lastUnknownItem = now;
+			int session = generation;
+			Filepath folder = dataDirectory;
+			loader.execute(() -> {
+				// The load queued ahead of this one may have fetched the list a moment ago.
+				long started = clock.getAsLong();
+				if (generation != session || withinADay(listFetchedAt, started))
+				{
+					return;
+				}
+				Map<Integer, Entry> before = entries;
+				refreshCompletion(folder, session, true, config.refreshWikiData());
+				// Items new to the list mean new drop tables as well; an unchanged list leaves the rates alone.
+				if (!before.keySet().containsAll(entries.keySet()))
+				{
+					refreshDropRates(folder, session, true, config.refreshWikiData());
+				}
+			});
+		}
+	}
+
+	private boolean listCheckedWithinADay(long now)
+	{
+		return withinADay(lastUnknownItem, now) || withinADay(listFetchedAt, now);
+	}
+
+	private static boolean withinADay(long then, long now)
+	{
+		return then > 0 && then <= now && now - then < UNKNOWN_ITEM_INTERVAL;
+	}
+
 	private void refreshCompletion(Filepath folder, int session, boolean forceRefresh, boolean download)
 	{
 		Filepath cache = folder.joinSegment("wiki-completion-cache.json");
-		long now = System.currentTimeMillis();
+		long now = clock.getAsLong();
 		try (Reader reader = cache.openBufferedReader())
 		{
 			JsonObject saved = gson.fromJson(reader, JsonObject.class);
@@ -185,7 +240,9 @@ class WikiRarity
 			{
 				return;
 			}
-			if (!forceRefresh && !staleSince(saved.get("fetchedAt").getAsLong(), now))
+			long fetchedAt = saved.get("fetchedAt").getAsLong();
+			listFetchedAt = fetchedAt;
+			if (!forceRefresh && !staleSince(fetchedAt, now))
 			{
 				return;
 			}
@@ -205,6 +262,7 @@ class WikiRarity
 			{
 				return;
 			}
+			listFetchedAt = now;
 			JsonObject saved = new JsonObject();
 			saved.addProperty("fetchedAt", now);
 			saved.addProperty("attribution", "OSRS Wiki contributors: Module:Collection_log/data.json and completion.json");
@@ -228,7 +286,7 @@ class WikiRarity
 			return;
 		}
 		Filepath cache = folder.joinSegment("wiki-drop-rates-cache.json");
-		long now = System.currentTimeMillis();
+		long now = clock.getAsLong();
 		try (Reader reader = cache.openBufferedReader())
 		{
 			JsonObject saved = gson.fromJson(reader, JsonObject.class);
@@ -262,7 +320,7 @@ class WikiRarity
 				return;
 			}
 			JsonObject saved = new JsonObject();
-			saved.addProperty("fetchedAt", System.currentTimeMillis());
+			saved.addProperty("fetchedAt", clock.getAsLong());
 			saved.addProperty("format", CACHE_FORMAT);
 			saved.addProperty("attribution", "OSRS Wiki contributors: Bucket:Dropsline");
 			saved.addProperty("source", "https://oldschool.runescape.wiki/w/Bucket:Dropsline");

@@ -34,7 +34,6 @@ public class RarityResolver
 	private static final double RARE_PERCENTILE = 80;
 	private static final double VERY_RARE_PERCENTILE = 95;
 
-	@Inject
 	net.runelite.client.plugins.grounditems.GroundItemsConfig groundItemsConfig;
 	private final ItemManager itemManager;
 	private final CelebrationConfig config;
@@ -48,6 +47,16 @@ public class RarityResolver
 		this.config = config;
 		this.dropRateResolver = dropRateResolver;
 		this.completionData = new CompletionData(Map.of());
+	}
+
+	/**
+	 * Ground Items' settings (hidden items, value tiers and colours), read as they are saved. Not a binding of the
+	 * plugin: see {@link CelebrationPlugin#provideConfig}.
+	 */
+	@Inject
+	void readGroundItems(net.runelite.client.config.ConfigManager manager)
+	{
+		groundItemsConfig = manager.getConfig(net.runelite.client.plugins.grounditems.GroundItemsConfig.class);
 	}
 
 	/**

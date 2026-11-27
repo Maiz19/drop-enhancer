@@ -47,7 +47,6 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.plugins.grounditems.GroundItemsConfig;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.Filepath;
@@ -130,20 +129,14 @@ public class CelebrationPlugin extends Plugin
 		return System.currentTimeMillis();
 	}
 
+	/**
+	 * The only Config bound here: RuneLite opens the first Config it finds among a plugin's bindings as that plugin's
+	 * settings, in no fixed order. Ground Items' settings are therefore read where they are used, never bound.
+	 */
 	@Provides
 	CelebrationConfig provideConfig(ConfigManager manager)
 	{
 		return manager.getConfig(CelebrationConfig.class);
-	}
-
-	/**
-	 * Ground Items' settings (hidden items, value tiers and colours), read as they are saved. Since RuneLite 1.13 a
-	 * {@code @PluginDependency} must expose services, which Ground Items does not.
-	 */
-	@Provides
-	GroundItemsConfig provideGroundItemsConfig(ConfigManager manager)
-	{
-		return manager.getConfig(GroundItemsConfig.class);
 	}
 	@Override
 	protected void startUp() throws IOException
@@ -317,7 +310,9 @@ public class CelebrationPlugin extends Plugin
 				String name = notificationItem(main);
 				if (name != null)
 				{
-					cox.arm(name);
+					// Our popup starts with the game's, not once that one has opened: with only the pop-up
+					// setting on, a screenshot taken at the delay script found ours still off screen.
+					unlock(name);
 					// Every collection log popup is replaced from its first frame: waiting for the delay
 					// script let the game's own popup flash before it was hidden.
 					replacedNotification = main;
@@ -436,6 +431,11 @@ public class CelebrationPlugin extends Plugin
 			return;
 		}
 		knownLoggedNames.add(name.toLowerCase(Locale.ROOT));
+		if (wiki.entry(names.getOrDefault(name.toLowerCase(Locale.ROOT), -1), name) == null)
+		{
+			// The game says this is a collection log item, so a list without it is out of date.
+			wiki.unknownItem();
+		}
 		sounds.cancelValue(name);
 		long now = now();
 		for (Celebration c : pending.items())

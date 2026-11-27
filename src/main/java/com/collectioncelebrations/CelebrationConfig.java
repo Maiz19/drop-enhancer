@@ -45,7 +45,7 @@ public interface CelebrationConfig extends Config
 
 	@ConfigItem(keyName = "refreshWikiData", name = "Refresh wiki data",
 				description = "Fetch item lists, completion percentages and drop rates from the OSRS Wiki. Refreshed weekly, after the "
-							  + "Wednesday game update; switch off and on to update now. Switch off to stop all wiki requests. Sends no "
+							  + "Wednesday game update, and at most once a day for a new item it lacks; switch off and on to update now. Switch off to stop all wiki requests. Sends no "
 							  + "player data. Wiki data: CC BY-NC-SA 3.0, OSRS Wiki contributors.",
 				warning = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers",
 				section = rarity, position = -2)
